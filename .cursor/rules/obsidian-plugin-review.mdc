@@ -1,5 +1,5 @@
 ---
-description: K-Tech Vault Atlas — コミュニティ審査 Warning 回避
+description: K-Tech Vault Atlas — コミュニティ審査で落ちた項目を繰り返さない
 globs:
   - "**/*"
 alwaysApply: true
@@ -7,37 +7,91 @@ alwaysApply: true
 
 # Obsidian コミュニティ審査 — Vault Atlas
 
-公開前に必ず確認する。
+出荷・pending の前に、このファイルを上から確認する。推測で「通るはず」としない。
+
+## 1.0 出荷で実際に落ちたこと（再発禁止）
+
+### リポジトリと Listing
+
+- コミュニティ掲載の GitHub は **public 必須**。private のままだと `Could not find or validate a manifest (manifest.json)` になる
+- 掲載 URL はリポジトリ（`https://github.com/crossbeat461-a11y/K-Tech-Vault-Atlas`）。`authorUrl` はプロフィール（リポジトリではない）
+- 同じ版番号では「new」にならない。審査エラーを直したら **必ず版を上げて** 新しい GitHub Release を切る。tag の作り直しや Actions の **rerun では足りない**
+- 人に案内する再スキャンは Edit listing ではなく、community.obsidian.md のエントリーで **`…` → Check for new releases**、必要なら **Request review**
+
+### Attestation（署名）
+
+private のまま tag を push すると attestation が失敗する。public にしたあと失敗ジョブを **rerun** すると、Release はできても審査が次で落ちる。
+
+> The `main.js` / `styles.css` release asset has an attestation that failed cryptographic verification.
+
+理由:
+
+- Obsidian はファイルの SHA-256 で attestation を引く
+- `main.js` と `styles.css` の中身が前の版と同じだと、壊れた署名が同じ digest に残る
+- `manifest.json` だけ版で中身が変わるので、そちらだけ通ることがある
+
+やってはいけないこと:
+
+- private のまま Release を切る
+- 失敗した Release workflow を rerun して使い回す
+- 版だけ変えて `main.js` / `styles.css` のバイト列を変えない
+
+必ずやること:
+
+- リポジトリが **public** になってから tag を push する
+- CI で `npm ci` → `npm run build` してから、**ファイルごとに** `actions/attest-build-provenance`（3 ファイルを1本にまとめない）
+- `main.js` のバナーと `styles.css` 先頭コメントに **版番号** を入れ、digest を版ごとに変える
+- 失敗したら rerun せず、**新しい版**（1.0.4 → 1.0.5 など）で tag し直す
+- 出荷前に各 asset の attestation 件数が **1** であること。2 件以上は古い署名が残っている
+
+### コード審査（Error / Warning）
+
+| 落ちた内容 | 禁止 | 代わり |
+| --- | --- | --- |
+| `no-unsupported-api` | `minAppVersion` より新しい API。例: `PluginSettingTab#update()` は 1.13。`minAppVersion` 1.8.7 では呼べない | 1.8.7 なら `display()`。API を使うなら `minAppVersion` と `versions.json` をその版に上げる |
+| `Vault.trash()` | ユーザーの削除設定を無視する | `FileManager.trashFile()` |
+| `.obsidian` 直書き | 設定フォルダ名はユーザーが変えられる | `Vault#configDir` |
+| `getSettingDefinitions()` なし | 1.13 の設定検索に出ない | 定義を返す。古い本体向けに `display()` も残す |
+| `no-unsafe-*` | `loadData()` の `any`、`JSON.parse` の `any`、`app.plugins`、`String#matchAll`（lib が ES6 だと any）、`Array.isArray` の `any[]` | `unknown` に落としてから絞り込む。Homepage は `Reflect.get`。正規表現は `RegExp.exec` |
+| 不要な `as` | 受け側が元の型で足りるアサーション | 型を直す |
+
+`obsidian.d.ts` の `@since` を見て、`minAppVersion` より新しいものは呼び出さない。
 
 ## manifest.json
 
-- `description` に **Obsidian** を入れない
+- `description` に **Obsidian** を入れない（250 文字以内）
 - `name` に **Plugin** を入れない（K-Tech Vault Atlas でよい）
-- `authorUrl` は GitHub **プロファイル** URL（リポジトリ URL 不可）
+- `authorUrl` は GitHub **プロファイル**
 - `fundingUrl` を設定（Buy Me a Coffee）
-- `isDesktopOnly` は実態に合わせる（モバイルでもスキャン可なら false）
+- `isDesktopOnly` は実態に合わせる
+- `version` と git tag と Release 名を一致させる
+- `minAppVersion` と `versions.json` を一致させる。いまの正は **1.8.7**
 
 ## コード
 
-- **ネットワークリクエスト禁止**（スキャンは Vault 内のみ）
-- 本番で `console.log` / `console.error` を出さない（`esbuild.config.mjs` の `drop: ["console", "debugger"]`）
-- GitHub Release は tag = manifest.version。`main.js` / `manifest.json` / `styles.css` を **個別 asset** で添付（zip のみ不可）
-- 破壊的操作は Phase 2 以降。Phase 1 は読み取りのみ
-- `loadData` / `saveData` は `storage.ts` 経由。旧形式も `parseStorage` で吸収
+- スキャンのネットワーク送信禁止。Buy Me a Coffee は `window.open` のみ
+- 本番で `console.log` / `console.error` を出さない（esbuild `drop`）
+- `loadData` / `saveData` は `storage.ts` 経由
 
 ## 設定 UI
 
-- 設定は **タブ**（Profile / Scan / Support）
-- `getSettingDefinitions()` を実装する（1.13 の設定検索）。`display()` は 1.8.7 向けフォールバック。`PluginSettingTab#update()` は 1.13 専用なので `minAppVersion` が 1.8.7 のときは呼ばない
-- Support タブに Buy Me a Coffee ボタン
-- 初回インストール・版更新時は `FundingModal`（`lastSeenVersion` で1回）
-- `loadData()` は `unknown` に落とす。`JSON.parse` / `Array.isArray` も unknown 経由
-- 削除は `FileManager.trashFile()`。設定フォルダは `Vault#configDir`（`.obsidian` を直書きしない）
+- タブ: Profile / Scan / Support
+- `getSettingDefinitions()` あり。再描画は `display()`（`update()` 禁止、minAppVersion 1.8.7）
+- Support に Buy Me a Coffee。初回・更新は `FundingModal`
 
-## リリース資産
+## リリース手順
 
-- リポジトリは **public**（private では attestation 不可）
-- tag push → CI で `npm ci` / `npm run build` 後、**ファイルごとに** attestation → Release へ `main.js`, `manifest.json`, `styles.css`
-- `main.js` / `styles.css` のバイト列は版ごとに変える（バナーに版番号）。同じハッシュを再リリースしない。Obsidian は digest 単位で古い attestation も見る
-- **rerun しない**。失敗時は新しい版番号で tag を切る
-- `LISTING.md` は掲載時にエージェントが貼る（200 / 1000 文字制限）
+1. リポジトリが public か、`https://raw.githubusercontent.com/crossbeat461-a11y/K-Tech-Vault-Atlas/main/manifest.json` が 200 か確認する
+2. 使う API が `minAppVersion` 以下か確認する
+3. `manifest.json` / `package.json` / `versions.json` / CSS コメント / esbuild バナーの版を揃える
+4. `npm run build`
+5. tag push（`version` と同じ。`v` を付けない）
+6. Actions が成功し、Release に `main.js` / `manifest.json` / `styles.css` が個別添付されていること
+7. 各ファイルの attestation が 1 件であること
+8. `LISTING.md` を Edit listing に貼る（短文 200 / 長文 1000。スペース含む）
+9. 人は **新しい版** の pending だけ確定する
+
+## LISTING.md
+
+- 短文 200 文字以内、長文 1000 文字以内
+- Release タイトルに版番号（例: `K-Tech Vault Atlas 1.0.4`）
