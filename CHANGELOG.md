@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [1.0.1] — 2026-09-18
+
+### Fixed
+
+- Release workflow: CI でビルドしてから attestation（審査の provenance 検証対応）
+
 ## [1.0.0] — 2026-09-18
 
 ### Added
