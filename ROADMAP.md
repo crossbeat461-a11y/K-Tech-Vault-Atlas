@@ -25,7 +25,13 @@ Vault Doctor / Vault Inspector が「メンテナンス全般」なら、Vault A
 | 4 | 0.7 | Home 未リンク HUB 検出・リンク追記、Homepage 連携 | **完了** |
 | 5 | 0.8 | Deep Scan、HUB 保護、除外候補提案 | **完了** |
 | 6 | 0.9 | Folder Guide、Markdown ファイル出力 | **完了** |
-| 7 | 1.0.0 | 安定化、GitHub Release、掲載判断 | 次 |
+| 7 | 1.0.0 | 安定化、GitHub Release、掲載判断 | **完了** |
+
+## 1.0.0 出荷
+
+- GitHub Release（tag = manifest.version、個別 asset）
+- LISTING.md（community 掲載文）
+- コミュニティ pending は人が確定
 
 ## 0.9.0 で足したこと
 
