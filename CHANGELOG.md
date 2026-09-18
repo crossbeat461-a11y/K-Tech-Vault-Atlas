@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [1.0.4] — 2026-09-18
+
+### Fixed
+
+- 設定の再描画を `display()` に変更（`update()` は minAppVersion 1.8.7 より新しい API）
+
 ## [1.0.3] — 2026-09-18
 
 ### Fixed
