@@ -21,7 +21,7 @@ Vault Atlas は **Core + 将来 Modules** の1リポジトリ構成。
 └─────────────────────────────────────────┘
 ```
 
-公開までは **private GitHub リポジトリ1本** に MD とコードを同居させる。
+公開後は **public GitHub リポジトリ1本** に MD とコードを同居させる。LP は別リポジトリ `K-Tech-Vault-Atlas-LP`。
 
 ## Vault Profile
 
@@ -63,6 +63,6 @@ User: Run scan
 
 ## Mac / Windows
 
-- 正本: GitHub private repo
+- 正本: GitHub public repo（`crossbeat461-a11y/K-Tech-Vault-Atlas`）
 - 改行: `.gitattributes` `* text=auto`
 - 作業前: `git pull --ff-only --prune`

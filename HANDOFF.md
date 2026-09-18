@@ -9,8 +9,10 @@
 | ID | `k-tech-vault-atlas` |
 | Name | K-Tech Vault Atlas |
 | Author | K-Tech Studio |
-| Repo | `crossbeat461-a11y/K-Tech-Vault-Atlas`（private） |
-| Version | **1.0.0** |
+| Repo | `crossbeat461-a11y/K-Tech-Vault-Atlas`（public） |
+| LP | https://k-tech-vault-atlas-lp.vercel.app/ |
+| Community | https://obsidian.md/plugins?id=k-tech-vault-atlas |
+| Version | **1.0.4** |
 
 ## Privacy
 
@@ -82,8 +84,9 @@ Policy: `ROADMAP.md` が正本。
 - [x] Folder Guide（0.9.0）
 - [x] Markdown レポートのファイル出力（0.9.0）
 
-## Ship（1.0.0）
+## Ship（1.0.4）
 
-- GitHub Release: tag `1.0.0` → Actions が asset 公開
+- GitHub Release: 現行 tag は `1.0.4`（審査対応後。1.0.0 から上げた）
+- LP: https://k-tech-vault-atlas-lp.vercel.app/
 - community.obsidian.md: `LISTING.md` を Edit listing に貼る
 - pending 確定は Obsidian 本体で人が行う
