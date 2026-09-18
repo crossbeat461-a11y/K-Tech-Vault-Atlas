@@ -294,7 +294,7 @@ export class VaultAtlasSettingTab extends PluginSettingTab {
         profile.entryNotePath || "Home.md"
       );
       new Notice(`Vault Atlas: ${path} を作成しました`);
-      this.update();
+      this.display();
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "作成失敗";
       new Notice(`Vault Atlas: ${message}`);

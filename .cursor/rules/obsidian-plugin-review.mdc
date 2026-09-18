@@ -28,7 +28,7 @@ alwaysApply: true
 ## 設定 UI
 
 - 設定は **タブ**（Profile / Scan / Support）
-- `getSettingDefinitions()` を実装する（1.13 の設定検索）。`display()` は 1.8.7 向けフォールバック
+- `getSettingDefinitions()` を実装する（1.13 の設定検索）。`display()` は 1.8.7 向けフォールバック。`PluginSettingTab#update()` は 1.13 専用なので `minAppVersion` が 1.8.7 のときは呼ばない
 - Support タブに Buy Me a Coffee ボタン
 - 初回インストール・版更新時は `FundingModal`（`lastSeenVersion` で1回）
 - `loadData()` は `unknown` に落とす。`JSON.parse` / `Array.isArray` も unknown 経由
