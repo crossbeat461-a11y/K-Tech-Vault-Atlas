@@ -33,5 +33,7 @@ alwaysApply: true
 
 ## リリース資産
 
-- tag push → `main.js`, `manifest.json`, `styles.css`
+- リポジトリは **public**（private では attestation 不可）
+- tag push → CI で `npm ci` / `npm run build` 後に attestation → Release へ `main.js`, `manifest.json`, `styles.css`
+- **rerun しない**。失敗時は Release と tag を削除して tag を再 push
 - `LISTING.md` は掲載時にエージェントが貼る（200 / 1000 文字制限）
