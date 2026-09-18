@@ -20,7 +20,8 @@ alwaysApply: true
 ## コード
 
 - **ネットワークリクエスト禁止**（スキャンは Vault 内のみ）
-- 本番で `console.log` / `console.error` を出さない（ユーザー向けは `Notice`）
+- 本番で `console.log` / `console.error` を出さない（`esbuild.config.mjs` の `drop: ["console", "debugger"]`）
+- GitHub Release は tag = manifest.version。`main.js` / `manifest.json` / `styles.css` を **個別 asset** で添付（zip のみ不可）
 - 破壊的操作は Phase 2 以降。Phase 1 は読み取りのみ
 - `loadData` / `saveData` は `storage.ts` 経由。旧形式も `parseStorage` で吸収
 

@@ -35,6 +35,7 @@ export function buildHubTemplate(input: HubTemplateInput): string {
   return `---
 title: ${title}
 type: hub
+hub-managed: atlas
 tags: ${tags}
 ---
 

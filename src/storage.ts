@@ -7,16 +7,22 @@ import {
   parseHubDeferred,
   type HubDeferredEntry,
 } from "./hub-defer";
+import { parseHubProtected } from "./hub/hub-protect";
 
 export interface PluginStorage {
   vaultProfile: VaultProfileV1;
   hubDeferred: HubDeferredEntry[];
+  hubProtected: string[];
   lastSeenVersion?: string;
 }
 
 export function parseStorage(raw: unknown): PluginStorage {
   if (!raw || typeof raw !== "object") {
-    return { vaultProfile: { ...DEFAULT_VAULT_PROFILE }, hubDeferred: [] };
+    return {
+      vaultProfile: { ...DEFAULT_VAULT_PROFILE },
+      hubDeferred: [],
+      hubProtected: [],
+    };
   }
 
   const data = raw as Record<string, unknown>;
@@ -27,6 +33,7 @@ export function parseStorage(raw: unknown): PluginStorage {
         data.vaultProfile as Partial<VaultProfileV1> | undefined
       ),
       hubDeferred: parseHubDeferred(data.hubDeferred),
+      hubProtected: parseHubProtected(data.hubProtected),
       lastSeenVersion:
         typeof data.lastSeenVersion === "string"
           ? data.lastSeenVersion
@@ -37,6 +44,7 @@ export function parseStorage(raw: unknown): PluginStorage {
   return {
     vaultProfile: mergeVaultProfile(data as Partial<VaultProfileV1>),
     hubDeferred: parseHubDeferred(data.hubDeferred),
+    hubProtected: parseHubProtected(data.hubProtected),
     lastSeenVersion: undefined,
   };
 }
@@ -44,7 +52,8 @@ export function parseStorage(raw: unknown): PluginStorage {
 export function toStorage(
   vaultProfile: VaultProfileV1,
   hubDeferred: HubDeferredEntry[],
+  hubProtected: string[],
   lastSeenVersion?: string
 ): PluginStorage {
-  return { vaultProfile, hubDeferred, lastSeenVersion };
+  return { vaultProfile, hubDeferred, hubProtected, lastSeenVersion };
 }

@@ -26,7 +26,7 @@ __export(main_exports, {
   default: () => VaultAtlasPlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian9 = require("obsidian");
+var import_obsidian16 = require("obsidian");
 
 // src/funding.ts
 var import_obsidian = require("obsidian");
@@ -135,15 +135,145 @@ function parseHubDeferred(raw) {
   return result;
 }
 
-// src/scan/vault-scan.ts
+// src/entry/entry-resolve.ts
+var import_obsidian3 = require("obsidian");
+
+// src/entry/homepage-integration.ts
 var import_obsidian2 = require("obsidian");
+var HOMEPAGE_PLUGIN_ID = "homepage";
+function isHomepagePluginEnabled(app) {
+  const plugin = app.plugins.getPlugin(HOMEPAGE_PLUGIN_ID);
+  return plugin !== null && plugin instanceof Object;
+}
+async function readHomepagePluginData(app) {
+  if (!isHomepagePluginEnabled(app)) {
+    return null;
+  }
+  const adapter = app.vault.adapter;
+  const configPath = `${app.vault.configDir}/plugins/homepage/data.json`;
+  try {
+    if (!await adapter.exists(configPath)) {
+      return null;
+    }
+    const raw = await adapter.read(configPath);
+    return JSON.parse(raw);
+  } catch (e) {
+    return null;
+  }
+}
+function pickStartupHomepageEntry(data) {
+  const pages = data.homepages;
+  if (!pages) {
+    return null;
+  }
+  for (const entry of Object.values(pages)) {
+    if (entry.kind === "File" && entry.openOnStartup) {
+      return entry;
+    }
+  }
+  for (const entry of Object.values(pages)) {
+    if (entry.kind === "File") {
+      return entry;
+    }
+  }
+  return null;
+}
+function resolveNotePathFromHomepageValue(app, value) {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+  const candidates = trimmed.endsWith(".md") ? [trimmed] : [trimmed, `${trimmed}.md`];
+  for (const candidate of candidates) {
+    const file = app.vault.getAbstractFileByPath(candidate);
+    if (file instanceof import_obsidian2.TFile) {
+      return file.path;
+    }
+  }
+  const matches = app.vault.getMarkdownFiles().filter((file) => file.basename === trimmed.replace(/\.md$/i, ""));
+  if (matches.length === 1) {
+    return matches[0].path;
+  }
+  return null;
+}
+async function resolveHomepageEntryPath(app) {
+  const data = await readHomepagePluginData(app);
+  if (!data) {
+    return null;
+  }
+  const entry = pickStartupHomepageEntry(data);
+  if (!entry || entry.kind !== "File") {
+    return null;
+  }
+  return resolveNotePathFromHomepageValue(app, entry.value);
+}
+
+// src/entry/entry-resolve.ts
+async function resolveEntry(app, profile) {
+  const homepageAvailable = isHomepagePluginEnabled(app);
+  const homepagePath = homepageAvailable ? await resolveHomepageEntryPath(app) : null;
+  const manualPath = profile.entryNotePath.trim() || "Home.md";
+  let effectivePath = null;
+  let source = profile.entrySource;
+  if (profile.entrySource === "homepage") {
+    if (homepagePath) {
+      effectivePath = homepagePath;
+      source = "homepage";
+    } else {
+      effectivePath = manualPath;
+      source = "manual";
+    }
+  } else {
+    effectivePath = manualPath;
+    source = "manual";
+  }
+  const file = effectivePath ? app.vault.getAbstractFileByPath(effectivePath) : null;
+  const exists = file instanceof import_obsidian3.TFile;
+  const displayLabel = source === "homepage" && homepagePath ? `${effectivePath != null ? effectivePath : manualPath}\uFF08Homepage \u9023\u643A\uFF09` : `${effectivePath != null ? effectivePath : manualPath}\uFF08\u624B\u52D5\uFF09`;
+  return {
+    effectivePath,
+    source,
+    homepageAvailable,
+    homepagePath,
+    manualPath,
+    exists,
+    displayLabel
+  };
+}
+function effectiveEntryPathForScan(resolved) {
+  var _a;
+  return (_a = resolved.effectivePath) != null ? _a : resolved.manualPath;
+}
+
+// src/hub/hub-protect.ts
+function parseHubProtected(raw) {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  return raw.filter((item) => typeof item === "string");
+}
+function isHubProtected(folderPath, hubProtected) {
+  return hubProtected.includes(folderPath);
+}
+function mergeHubProtectedLists(previous, selectedFolderPaths) {
+  return [...new Set(selectedFolderPaths)].sort(
+    (a, b) => a.localeCompare(b, "ja")
+  );
+}
+
+// src/scan/vault-scan.ts
+var import_obsidian6 = require("obsidian");
 
 // src/profile.ts
 var DEFAULT_VAULT_PROFILE = {
   version: 1,
+  entrySource: "manual",
   entryNotePath: "Home.md",
   hubTypeProperty: "type",
   hubTypeValue: "hub",
+  hubManagedProperty: "hub-managed",
+  hubManagedExternalValue: "external",
+  hubManagedAtlasValue: "atlas",
   hubNaming: "flexible",
   excludeFolderPrefixes: [
     ".obsidian/",
@@ -156,6 +286,7 @@ var DEFAULT_VAULT_PROFILE = {
   minMarkdownForHub: 3,
   deferReconsiderDelta: 2,
   skipRootWithoutHub: true,
+  reportExportFolder: "90 System/Vault Atlas/",
   confirmedAt: ""
 };
 function normalizeFolderPath(path) {
@@ -194,8 +325,16 @@ function mergeVaultProfile(stored) {
     ),
     minMarkdownForHub: typeof stored.minMarkdownForHub === "number" ? stored.minMarkdownForHub : DEFAULT_VAULT_PROFILE.minMarkdownForHub,
     deferReconsiderDelta: typeof stored.deferReconsiderDelta === "number" ? stored.deferReconsiderDelta : DEFAULT_VAULT_PROFILE.deferReconsiderDelta,
-    skipRootWithoutHub: typeof stored.skipRootWithoutHub === "boolean" ? stored.skipRootWithoutHub : DEFAULT_VAULT_PROFILE.skipRootWithoutHub
+    skipRootWithoutHub: typeof stored.skipRootWithoutHub === "boolean" ? stored.skipRootWithoutHub : DEFAULT_VAULT_PROFILE.skipRootWithoutHub,
+    entrySource: stored.entrySource === "homepage" || stored.entrySource === "manual" ? stored.entrySource : DEFAULT_VAULT_PROFILE.entrySource,
+    hubManagedProperty: typeof stored.hubManagedProperty === "string" && stored.hubManagedProperty.trim() ? stored.hubManagedProperty.trim() : DEFAULT_VAULT_PROFILE.hubManagedProperty,
+    hubManagedExternalValue: typeof stored.hubManagedExternalValue === "string" && stored.hubManagedExternalValue.trim() ? stored.hubManagedExternalValue.trim() : DEFAULT_VAULT_PROFILE.hubManagedExternalValue,
+    hubManagedAtlasValue: typeof stored.hubManagedAtlasValue === "string" && stored.hubManagedAtlasValue.trim() ? stored.hubManagedAtlasValue.trim() : DEFAULT_VAULT_PROFILE.hubManagedAtlasValue,
+    reportExportFolder: typeof stored.reportExportFolder === "string" && stored.reportExportFolder.trim() ? normalizeFolderPath(stored.reportExportFolder.trim()) : DEFAULT_VAULT_PROFILE.reportExportFolder
   };
+}
+function needsDeepScan(profile) {
+  return profile.confirmedAt.trim().length === 0;
 }
 function profileDiffersFromStored(stored, merged) {
   var _a, _b;
@@ -250,40 +389,6 @@ function parentFolderPath(folderPath) {
   }
   parts.pop();
   return parts.join("/");
-}
-
-// src/hub/hub-template.ts
-function suggestHubPath(folderPath) {
-  const base = folderBasename(folderPath);
-  return folderPath ? `${folderPath}/${base}.md` : `${base}.md`;
-}
-function wikilink(path, alias) {
-  const noExt = path.replace(/\.md$/i, "");
-  return alias ? `[[${noExt}|${alias}]]` : `[[${noExt}]]`;
-}
-function buildHubTemplate(input) {
-  const title = folderBasename(input.folderPath);
-  const tagStem = title.toLowerCase().replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "");
-  const tags = tagStem ? `[hub, ${tagStem}]` : "[hub]";
-  const parentLink = input.parentHubPath ? wikilink(input.parentHubPath) : wikilink(input.entryNotePath, "Home");
-  const childLinks = input.childNotePaths.sort((a, b) => a.localeCompare(b, "ja")).map((path) => `- ${wikilink(path)}`).join("\n");
-  return `---
-title: ${title}
-type: hub
-tags: ${tags}
----
-
-# ${title}
-
-## \u5165\u53E3
-
-- \u89AA\u30CF\u30D6: ${parentLink}
-- \u7BA1\u5236\u5854: ${wikilink(input.entryNotePath, "Home")}
-
-## \u30CE\u30FC\u30C8
-
-${childLinks || "- \uFF08\u307E\u3060\u30CE\u30FC\u30C8\u304C\u3042\u308A\u307E\u305B\u3093\uFF09"}
-`;
 }
 
 // src/scan/hub-network.ts
@@ -406,6 +511,65 @@ function enrichRecommendReason(baseReason, network) {
   return baseReason;
 }
 
+// src/entry/entry-links.ts
+function findEntryUnlinkedHubs(hubPathsByFolder, entryContent, profile) {
+  const unlinked = [];
+  for (const [folderPath, hubPath] of hubPathsByFolder) {
+    if (isScanExcluded(folderPath, profile)) {
+      continue;
+    }
+    if (profile.skipRootWithoutHub && folderPath === "") {
+      continue;
+    }
+    const nearestParent = findNearestParentHub(folderPath, hubPathsByFolder);
+    if (nearestParent) {
+      continue;
+    }
+    if (parentLinksToChildHub(entryContent, folderPath, hubPath)) {
+      continue;
+    }
+    const label = folderPath || "(root)";
+    unlinked.push({ folderPath, hubPath, label });
+  }
+  unlinked.sort((a, b) => a.folderPath.localeCompare(b.folderPath, "ja"));
+  return unlinked;
+}
+
+// src/hub/hub-template.ts
+function suggestHubPath(folderPath) {
+  const base = folderBasename(folderPath);
+  return folderPath ? `${folderPath}/${base}.md` : `${base}.md`;
+}
+function wikilink(path, alias) {
+  const noExt = path.replace(/\.md$/i, "");
+  return alias ? `[[${noExt}|${alias}]]` : `[[${noExt}]]`;
+}
+function buildHubTemplate(input) {
+  const title = folderBasename(input.folderPath);
+  const tagStem = title.toLowerCase().replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "");
+  const tags = tagStem ? `[hub, ${tagStem}]` : "[hub]";
+  const parentLink = input.parentHubPath ? wikilink(input.parentHubPath) : wikilink(input.entryNotePath, "Home");
+  const childLinks = input.childNotePaths.sort((a, b) => a.localeCompare(b, "ja")).map((path) => `- ${wikilink(path)}`).join("\n");
+  return `---
+title: ${title}
+type: hub
+hub-managed: atlas
+tags: ${tags}
+---
+
+# ${title}
+
+## \u5165\u53E3
+
+- \u89AA\u30CF\u30D6: ${parentLink}
+- \u7BA1\u5236\u5854: ${wikilink(input.entryNotePath, "Home")}
+
+## \u30CE\u30FC\u30C8
+
+${childLinks || "- \uFF08\u307E\u3060\u30CE\u30FC\u30C8\u304C\u3042\u308A\u307E\u305B\u3093\uFF09"}
+`;
+}
+
 // src/scan/hub-detect.ts
 var FRONTMATTER_RE = /^---\n([\s\S]*?)\n---/;
 function parseFrontmatter(content) {
@@ -431,6 +595,263 @@ function parseFrontmatter(content) {
 function isHubNote(content, profile) {
   const fm = parseFrontmatter(content);
   return fm[profile.hubTypeProperty] === profile.hubTypeValue;
+}
+function getHubManagedValue(content, profile) {
+  var _a;
+  const fm = parseFrontmatter(content);
+  const value = (_a = fm[profile.hubManagedProperty]) == null ? void 0 : _a.trim();
+  return value && value.length > 0 ? value : null;
+}
+
+// src/scan/exclude-suggest.ts
+var import_obsidian4 = require("obsidian");
+function listMarkdownInFolder(folder) {
+  return folder.children.filter(
+    (child) => child instanceof import_obsidian4.TFile && child.extension === "md"
+  );
+}
+function countMarkdownRecursive(folder) {
+  let count = listMarkdownInFolder(folder).length;
+  for (const child of folder.children) {
+    if (child instanceof import_obsidian4.TFolder) {
+      count += countMarkdownRecursive(child);
+    }
+  }
+  return count;
+}
+function isPrefixAlreadyExcluded(prefix, profile) {
+  const normalized = normalizeFolderPath(prefix);
+  return profile.excludeFolderPrefixes.some(
+    (existing) => normalized.startsWith(normalizeFolderPath(existing))
+  );
+}
+function addSuggestion(suggestions, prefix, reason, markdownCount, profile) {
+  const normalized = normalizeFolderPath(prefix);
+  if (isPrefixAlreadyExcluded(normalized, profile)) {
+    return;
+  }
+  const existing = suggestions.get(normalized);
+  if (existing) {
+    existing.markdownCount = Math.max(existing.markdownCount, markdownCount);
+    return;
+  }
+  suggestions.set(normalized, {
+    prefix: normalized,
+    reason,
+    markdownCount
+  });
+}
+function suggestExcludeFolders(app, profile) {
+  const suggestions = /* @__PURE__ */ new Map();
+  const root = app.vault.getRoot();
+  const walk = (folder) => {
+    var _a;
+    const folderPath = folder.path;
+    const prefix = folderPath ? `${folderPath}/` : "";
+    if (folderPath.startsWith(".obsidian")) {
+      const mdCount2 = countMarkdownRecursive(folder);
+      if (mdCount2 > 0) {
+        addSuggestion(
+          suggestions,
+          ".obsidian/",
+          "\u30D7\u30E9\u30B0\u30A4\u30F3\u8A2D\u5B9A\u914D\u4E0B\u306B Markdown \u3042\u308A",
+          mdCount2,
+          profile
+        );
+      }
+    }
+    if (folderPath.startsWith(".cursor")) {
+      addSuggestion(
+        suggestions,
+        ".cursor/",
+        "Cursor \u8A2D\u5B9A\u30D5\u30A9\u30EB\u30C0",
+        countMarkdownRecursive(folder),
+        profile
+      );
+    }
+    if (profile.dailyFolderPattern && normalizeFolderPath(folderPath ? `${folderPath}/` : "").startsWith(
+      normalizeFolderPath(profile.dailyFolderPattern)
+    )) {
+      addSuggestion(
+        suggestions,
+        profile.dailyFolderPattern,
+        "Daily / \u65E5\u6B21\u30D5\u30A9\u30EB\u30C0\uFF08HUB \u4E0D\u8981\u5019\u88DC\uFF09",
+        countMarkdownRecursive(folder),
+        profile
+      );
+    }
+    const mdCount = listMarkdownInFolder(folder).length;
+    const leaf = (_a = folderPath.split("/").pop()) != null ? _a : "";
+    if (mdCount >= 5 && /inbox|daily|archive|temp|queue/i.test(leaf) && !isExcludedFolder(prefix || folderPath + "/", profile)) {
+      addSuggestion(
+        suggestions,
+        folderPath ? `${folderPath}/` : "",
+        `\u4E00\u6642\u7F6E\u304D\u5834\u3063\u307D\u3044\u30D5\u30A9\u30EB\u30C0\uFF08md ${mdCount} \u4EF6\uFF09`,
+        mdCount,
+        profile
+      );
+    }
+    for (const child of folder.children) {
+      if (child instanceof import_obsidian4.TFolder) {
+        walk(child);
+      }
+    }
+  };
+  walk(root);
+  return [...suggestions.values()].sort(
+    (a, b) => a.prefix.localeCompare(b.prefix, "ja")
+  );
+}
+
+// src/scan/folder-guide.ts
+var import_obsidian5 = require("obsidian");
+function listMarkdownInFolder2(folder) {
+  return folder.children.filter(
+    (child) => child instanceof import_obsidian5.TFile && child.extension === "md"
+  );
+}
+function normalizeName(name) {
+  return name.toLowerCase().replace(/[^a-z0-9\u3040-\u30ff\u4e00-\u9fff]+/gi, "");
+}
+function levenshtein(a, b) {
+  if (a === b) {
+    return 0;
+  }
+  if (a.length === 0) {
+    return b.length;
+  }
+  if (b.length === 0) {
+    return a.length;
+  }
+  const matrix = Array.from(
+    { length: a.length + 1 },
+    () => Array(b.length + 1).fill(0)
+  );
+  for (let i = 0; i <= a.length; i += 1) {
+    matrix[i][0] = i;
+  }
+  for (let j = 0; j <= b.length; j += 1) {
+    matrix[0][j] = j;
+  }
+  for (let i = 1; i <= a.length; i += 1) {
+    for (let j = 1; j <= b.length; j += 1) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      matrix[i][j] = Math.min(
+        matrix[i - 1][j] + 1,
+        matrix[i][j - 1] + 1,
+        matrix[i - 1][j - 1] + cost
+      );
+    }
+  }
+  return matrix[a.length][b.length];
+}
+function namingDriftReason(a, b) {
+  const na = normalizeName(a);
+  const nb = normalizeName(b);
+  if (!na || !nb || na === nb) {
+    return null;
+  }
+  if (na.length >= 4 && (na.startsWith(nb) || nb.startsWith(na))) {
+    return "\u540D\u524D\u306E\u524D\u7F00\u304C\u8FD1\u3044";
+  }
+  const distance = levenshtein(na, nb);
+  const threshold = Math.min(na.length, nb.length) >= 6 ? 3 : 2;
+  if (distance <= threshold) {
+    return `\u8868\u8A18\u304C\u8FD1\u3044\uFF08\u7DE8\u96C6\u8DDD\u96E2 ${distance}\uFF09`;
+  }
+  return null;
+}
+function collectChildFolderNames(folder) {
+  return folder.children.filter((child) => child instanceof import_obsidian5.TFolder).map((child) => child.name);
+}
+function buildFolderGuide(folders, profile) {
+  const emptyFolders = [];
+  const subfolderOnly = [];
+  const namingDrift = [];
+  const siblingsByParent = /* @__PURE__ */ new Map();
+  for (const folder of folders) {
+    const folderPath = folder.path;
+    if (isScanExcluded(folderPath, profile)) {
+      continue;
+    }
+    if (folderPath && isExcludedFolder(`${folderPath}/`, profile)) {
+      continue;
+    }
+    const mdCount = listMarkdownInFolder2(folder).length;
+    const subfolders = folder.children.filter(
+      (child) => child instanceof import_obsidian5.TFolder
+    );
+    if (folder.children.length === 0) {
+      emptyFolders.push({
+        folderPath: folderPath || "(root)",
+        detail: "\u7A7A\u30D5\u30A9\u30EB\u30C0"
+      });
+      continue;
+    }
+    if (mdCount === 0 && subfolders.length > 0) {
+      subfolderOnly.push({
+        folderPath: folderPath || "(root)",
+        detail: `\u76F4\u4E0B .md \u306A\u3057 / \u30B5\u30D6\u30D5\u30A9\u30EB\u30C0 ${subfolders.length} \u4EF6`
+      });
+    }
+    if (subfolders.length >= 2) {
+      siblingsByParent.set(folderPath, collectChildFolderNames(folder));
+    }
+  }
+  for (const [parentPath, names] of siblingsByParent) {
+    for (let i = 0; i < names.length; i += 1) {
+      for (let j = i + 1; j < names.length; j += 1) {
+        const reason = namingDriftReason(names[i], names[j]);
+        if (!reason) {
+          continue;
+        }
+        namingDrift.push({
+          parentPath: parentPath || "(root)",
+          folders: [names[i], names[j]],
+          reason
+        });
+      }
+    }
+  }
+  emptyFolders.sort((a, b) => a.folderPath.localeCompare(b.folderPath, "ja"));
+  subfolderOnly.sort((a, b) => a.folderPath.localeCompare(b.folderPath, "ja"));
+  namingDrift.sort((a, b) => a.parentPath.localeCompare(b.parentPath, "ja"));
+  return { emptyFolders, subfolderOnly, namingDrift };
+}
+
+// src/scan/hub-lock.ts
+function resolveHubLock(input) {
+  const hubManaged = getHubManagedValue(input.hubContent, input.profile);
+  if (input.hubPath === input.entryPath) {
+    return {
+      locked: true,
+      reason: "entry",
+      reasonLabel: "\u5165\u53E3\u30CE\u30FC\u30C8",
+      hubManaged
+    };
+  }
+  if (hubManaged === input.profile.hubManagedExternalValue) {
+    return {
+      locked: true,
+      reason: "external",
+      reasonLabel: "hub-managed: external",
+      hubManaged
+    };
+  }
+  if (isHubProtected(input.folderPath, input.hubProtected)) {
+    return {
+      locked: true,
+      reason: "protected",
+      reasonLabel: "Deep Scan \u3067\u4FDD\u8B77",
+      hubManaged
+    };
+  }
+  return {
+    locked: false,
+    reason: null,
+    reasonLabel: "",
+    hubManaged
+  };
 }
 
 // src/scan/hub-recommend.ts
@@ -495,9 +916,9 @@ function resolveParentHubPath(folderPath, hubPathsByFolder, entryNotePath) {
 }
 
 // src/scan/vault-scan.ts
-function listMarkdownInFolder(folder) {
+function listMarkdownInFolder3(folder) {
   return folder.children.filter(
-    (child) => child instanceof import_obsidian2.TFile && child.extension === "md"
+    (child) => child instanceof import_obsidian6.TFile && child.extension === "md"
   );
 }
 function collectFolders(root, profile) {
@@ -512,7 +933,7 @@ function collectFolders(root, profile) {
     }
     folders.push(folder);
     for (const child of folder.children) {
-      if (child instanceof import_obsidian2.TFolder) {
+      if (child instanceof import_obsidian6.TFolder) {
         walk(child);
       }
     }
@@ -522,7 +943,7 @@ function collectFolders(root, profile) {
 }
 async function findHubFilesInFolder(app, folder, profile) {
   const hubFiles = [];
-  for (const file of listMarkdownInFolder(folder)) {
+  for (const file of listMarkdownInFolder3(folder)) {
     const content = await app.vault.read(file);
     if (isHubNote(content, profile)) {
       hubFiles.push(file);
@@ -553,9 +974,14 @@ function buildRecommendedHub(folderPath, noteCount, subfolderCount, parentHubPat
     }
   };
 }
-async function scanVault(app, profile, hubDeferred = []) {
-  var _a;
+async function scanVault(app, profile, hubDeferred = [], options = {}) {
+  var _a, _b, _c, _d;
+  const scanMode = (_a = options.mode) != null ? _a : "quick";
+  const hubProtected = (_b = options.hubProtected) != null ? _b : [];
+  const resolvedEntry = await resolveEntry(app, profile);
+  const entryPath = effectiveEntryPathForScan(resolvedEntry);
   const findings = [];
+  const hubReviewItems = [];
   const recommendedHubs = [];
   const reconsideredHubs = [];
   const deferredWaiting = [];
@@ -585,20 +1011,39 @@ async function scanVault(app, profile, hubDeferred = []) {
       );
     }
   }
-  const entryFile = app.vault.getAbstractFileByPath(profile.entryNotePath);
-  if (entryFile instanceof import_obsidian2.TFile) {
+  const entryFile = resolvedEntry.effectivePath ? app.vault.getAbstractFileByPath(resolvedEntry.effectivePath) : null;
+  let entryContent = "";
+  if (entryFile instanceof import_obsidian6.TFile) {
+    entryContent = await app.vault.read(entryFile);
     findings.push({
       severity: "info",
       code: "ENTRY_FOUND",
-      message: `\u5165\u53E3\u30CE\u30FC\u30C8: ${profile.entryNotePath}`,
-      path: profile.entryNotePath
+      message: `\u5165\u53E3\u30CE\u30FC\u30C8: ${resolvedEntry.displayLabel}`,
+      path: entryPath
     });
   } else {
     findings.push({
       severity: "gap",
       code: "ENTRY_MISSING",
-      message: `\u5165\u53E3\u30CE\u30FC\u30C8\u304C\u898B\u3064\u304B\u308A\u307E\u305B\u3093: ${profile.entryNotePath}`,
-      path: profile.entryNotePath
+      message: `\u5165\u53E3\u30CE\u30FC\u30C8\u304C\u898B\u3064\u304B\u308A\u307E\u305B\u3093: ${entryPath}`,
+      path: entryPath
+    });
+  }
+  if (profile.entrySource === "homepage" && resolvedEntry.homepageAvailable && !resolvedEntry.homepagePath) {
+    findings.push({
+      severity: "warn",
+      code: "HOMEPAGE_ENTRY_UNRESOLVED",
+      message: "Homepage \u9023\u643A ON \u3067\u3059\u304C\u3001\u8D77\u52D5\u30CE\u30FC\u30C8\u3092\u89E3\u6C7A\u3067\u304D\u307E\u305B\u3093\u3002\u624B\u52D5\u30D1\u30B9\u306B\u30D5\u30A9\u30FC\u30EB\u30D0\u30C3\u30AF\u3057\u3066\u3044\u307E\u3059\u3002",
+      path: entryPath
+    });
+  }
+  const entryUnlinkedHubs = entryFile instanceof import_obsidian6.TFile ? findEntryUnlinkedHubs(hubPathsByFolder, entryContent, profile) : [];
+  for (const item of entryUnlinkedHubs) {
+    findings.push({
+      severity: "warn",
+      code: "ENTRY_HUB_UNLINKED",
+      message: `\u5165\u53E3\u304B\u3089\u672A\u30EA\u30F3\u30AF: ${item.folderPath}`,
+      path: item.hubPath
     });
   }
   const hubCount = hubPathsByFolder.size;
@@ -608,11 +1053,31 @@ async function scanVault(app, profile, hubDeferred = []) {
     if (isScanExcluded(folderPath, profile)) {
       continue;
     }
+    const hubContent = (_c = hubContentsByPath.get(hubPath)) != null ? _c : "";
+    const lock = resolveHubLock({
+      folderPath,
+      hubPath,
+      hubContent,
+      entryPath,
+      hubProtected,
+      profile
+    });
+    if (scanMode === "deep") {
+      hubReviewItems.push({
+        folderPath,
+        hubPath,
+        locked: lock.locked,
+        lockReason: lock.reason,
+        lockReasonLabel: lock.reasonLabel,
+        hubManaged: lock.hubManaged,
+        protectSuggested: lock.locked || hubProtected.includes(folderPath) || lock.hubManaged !== profile.hubManagedAtlasValue
+      });
+    }
     if (profile.skipRootWithoutHub && folderPath === "") {
       findings.push({
         severity: "warn",
         code: "ROOT_HUB_REDUNDANT",
-        message: `Vault \u30EB\u30FC\u30C8\u306E HUB (${hubPath}) \u306F\u5165\u53E3 ${profile.entryNotePath} \u3068\u91CD\u8907\u3057\u3084\u3059\u3044\u3067\u3059\u3002\u4E0D\u8981\u306A\u3089\u30C8\u30B0\u30EB OFF \u3067\u524A\u9664\u3092\u691C\u8A0E`,
+        message: lock.locked ? `Vault \u30EB\u30FC\u30C8\u306E HUB (${hubPath}) \u306F\u5165\u53E3 ${entryPath} \u3068\u91CD\u8907\u3057\u3084\u3059\u3044\u3067\u3059\uFF08\u30ED\u30C3\u30AF\u4E2D\uFF09` : `Vault \u30EB\u30FC\u30C8\u306E HUB (${hubPath}) \u306F\u5165\u53E3 ${entryPath} \u3068\u91CD\u8907\u3057\u3084\u3059\u3044\u3067\u3059\u3002\u4E0D\u8981\u306A\u3089\u30C8\u30B0\u30EB OFF \u3067\u524A\u9664\u3092\u691C\u8A0E`,
         path: hubPath
       });
       continue;
@@ -625,11 +1090,11 @@ async function scanVault(app, profile, hubDeferred = []) {
       hubPath
     );
     const folder = app.vault.getAbstractFileByPath(folderPath);
-    const markdownCount = folder instanceof import_obsidian2.TFolder ? listMarkdownInFolder(folder).length : 0;
+    const markdownCount = folder instanceof import_obsidian6.TFolder ? listMarkdownInFolder3(folder).length : 0;
     const parentHubPath = resolveParentHubPath(
       folderPath,
       hubPathsByFolder,
-      profile.entryNotePath
+      entryPath
     );
     existingHubs.push({
       folderPath,
@@ -639,7 +1104,11 @@ async function scanVault(app, profile, hubDeferred = []) {
       listedInParentHub: network.listedInParentHub,
       linkedFromParent: network.parentHubFile ? network.parentLinksToChild : false,
       parentHubPath,
-      parentHubFile: network.parentHubFile
+      parentHubFile: network.parentHubFile,
+      locked: lock.locked,
+      lockReason: lock.reason,
+      lockReasonLabel: lock.reasonLabel,
+      hubManaged: lock.hubManaged
     });
     if (network.parentHubFile && !network.parentLinksToChild) {
       const parentLabel = network.parentHubFile.replace(/\.md$/i, "");
@@ -665,7 +1134,7 @@ async function scanVault(app, profile, hubDeferred = []) {
       skippedExcluded += 1;
       continue;
     }
-    const hubFiles = (_a = hubFilesByFolder.get(folderPath)) != null ? _a : [];
+    const hubFiles = (_d = hubFilesByFolder.get(folderPath)) != null ? _d : [];
     if (hubFiles.length > 0) {
       if (hubFiles.length > 1) {
         findings.push({
@@ -678,10 +1147,10 @@ async function scanVault(app, profile, hubDeferred = []) {
       }
       continue;
     }
-    const mdFiles = listMarkdownInFolder(folder);
+    const mdFiles = listMarkdownInFolder3(folder);
     const noteCount = mdFiles.length;
     const subfolderCount = folder.children.filter(
-      (c) => c instanceof import_obsidian2.TFolder
+      (c) => c instanceof import_obsidian6.TFolder
     ).length;
     const parentPath = folderPath.includes("/") ? folderPath.split("/").slice(0, -1).join("/") : "";
     const hasParentHub = hubPathsByFolder.has(parentPath);
@@ -702,7 +1171,7 @@ async function scanVault(app, profile, hubDeferred = []) {
     const parentHubPath = resolveParentHubPath(
       folderPath,
       hubPathsByFolder,
-      profile.entryNotePath
+      entryPath
     );
     const networkCtx = buildHubNetworkContext(
       folderPath,
@@ -775,14 +1244,56 @@ async function scanVault(app, profile, hubDeferred = []) {
   });
   existingHubs.sort((a, b) => a.folderPath.localeCompare(b.folderPath, "ja"));
   linkGaps.sort((a, b) => a.folderPath.localeCompare(b.folderPath, "ja"));
+  hubReviewItems.sort((a, b) => a.folderPath.localeCompare(b.folderPath, "ja"));
+  const excludeSuggestions = scanMode === "deep" ? suggestExcludeFolders(app, profile) : [];
+  const folderGuide = buildFolderGuide(folders, profile);
+  for (const item of folderGuide.emptyFolders) {
+    findings.push({
+      severity: "info",
+      code: "FOLDER_EMPTY",
+      message: `\u7A7A\u30D5\u30A9\u30EB\u30C0: ${item.folderPath}`,
+      path: item.folderPath
+    });
+  }
+  for (const item of folderGuide.subfolderOnly) {
+    findings.push({
+      severity: "gap",
+      code: "FOLDER_SUBFOLDER_ONLY",
+      message: `\u6574\u7406\u5019\u88DC: ${item.folderPath} \u2014 ${item.detail}`,
+      path: item.folderPath
+    });
+  }
+  for (const group of folderGuide.namingDrift) {
+    findings.push({
+      severity: "warn",
+      code: "FOLDER_NAMING_DRIFT",
+      message: `\u547D\u540D\u3086\u308C: ${group.parentPath} \u2014 ${group.folders.join(" / ")}\uFF08${group.reason}\uFF09`,
+      path: group.parentPath,
+      detail: group.folders.join(", ")
+    });
+  }
   return {
     generatedAt: (/* @__PURE__ */ new Date()).toISOString(),
     vaultName: app.vault.getName(),
+    scanMode,
     foldersScanned: folders.length,
     hubCount,
     needsDecision: recommendedHubs.length + reconsideredHubs.length,
     optionalCount,
     skippedExcluded,
+    entryInfo: {
+      effectivePath: resolvedEntry.effectivePath,
+      source: resolvedEntry.source,
+      homepageAvailable: resolvedEntry.homepageAvailable,
+      homepagePath: resolvedEntry.homepagePath,
+      manualPath: resolvedEntry.manualPath,
+      exists: resolvedEntry.exists,
+      displayLabel: resolvedEntry.displayLabel
+    },
+    entryUnlinkedHubs,
+    hubReviewItems,
+    excludeSuggestions,
+    folderGuide,
     recommendedHubs,
     reconsideredHubs,
     deferredWaiting,
@@ -793,8 +1304,38 @@ async function scanVault(app, profile, hubDeferred = []) {
 }
 
 // src/settings.ts
-var import_obsidian3 = require("obsidian");
-var VaultAtlasSettingTab = class extends import_obsidian3.PluginSettingTab {
+var import_obsidian7 = require("obsidian");
+
+// src/entry/entry-create.ts
+async function createHomeEntryNote(app, entryPath = "Home.md") {
+  const existing = app.vault.getAbstractFileByPath(entryPath);
+  if (existing) {
+    throw new Error(`Already exists: ${entryPath}`);
+  }
+  const content = `---
+title: Home
+type: hub
+tags: [hub, home]
+---
+
+# Home
+
+Vault \u306E\u5165\u53E3\u3002\u4E3B\u8981 HUB \u3078\u306E\u30EA\u30F3\u30AF\u3092\u3053\u3053\u306B\u7F6E\u304D\u307E\u3059\u3002
+
+## \u3044\u307E\u958B\u304F
+
+- \uFF08Atlas \u30B9\u30AD\u30E3\u30F3\u5F8C\u3001\u672A\u30EA\u30F3\u30AF HUB \u3092\u3053\u3053\u306B\u8FFD\u52A0\u3067\u304D\u307E\u3059\uFF09
+
+## \u7BA1\u5236\u5854
+
+\u4E3B\u8981\u30BB\u30AF\u30B7\u30E7\u30F3\u306E HUB \u3092 \`type: hub\` \u3067\u6574\u7406\u3057\u3066\u304F\u3060\u3055\u3044\u3002
+`;
+  await app.vault.create(entryPath, content);
+  return entryPath;
+}
+
+// src/settings.ts
+var VaultAtlasSettingTab = class extends import_obsidian7.PluginSettingTab {
   constructor(app, plugin) {
     super(app, plugin);
     this.activeTab = "profile";
@@ -862,22 +1403,66 @@ var VaultAtlasSettingTab = class extends import_obsidian3.PluginSettingTab {
       cls: "setting-item-description"
     });
     const profile = this.profile();
-    new import_obsidian3.Setting(containerEl).setName("Entry note path").setDesc("\u5165\u53E3\u30CE\u30FC\u30C8\uFF08\u4F8B: Home.md\uFF09").addText(
+    const homepageAvailable = isHomepagePluginEnabled(this.app);
+    new import_obsidian7.Setting(containerEl).setName("Homepage \u9023\u643A").setDesc(
+      homepageAvailable ? "ON \u306B\u3059\u308B\u3068 Homepage \u30D7\u30E9\u30B0\u30A4\u30F3\u306E\u8D77\u52D5\u30CE\u30FC\u30C8\u3092\u5165\u53E3\u3068\u3057\u3066\u4F7F\u3044\u307E\u3059\uFF08kind: File\uFF09\u3002" : "Homepage \u30D7\u30E9\u30B0\u30A4\u30F3\u304C\u898B\u3064\u304B\u308A\u307E\u305B\u3093\u3002\u624B\u52D5\u30D1\u30B9\u306E\u307F\u4F7F\u3048\u307E\u3059\u3002"
+    ).addToggle((toggle) => {
+      toggle.setValue(profile.entrySource === "homepage");
+      if (!homepageAvailable) {
+        toggle.setDisabled(true);
+      }
+      toggle.onChange(async (on) => {
+        await this.saveProfile({ entrySource: on ? "homepage" : "manual" });
+        this.display();
+      });
+    });
+    void resolveEntry(this.app, profile).then((resolved) => {
+      new import_obsidian7.Setting(containerEl).setName("\u6709\u52B9\u306A\u5165\u53E3").setDesc(
+        resolved.exists ? resolved.displayLabel : `${resolved.displayLabel} \u2014 \u30D5\u30A1\u30A4\u30EB\u672A\u4F5C\u6210`
+      ).addText((text) => {
+        var _a;
+        text.setValue((_a = resolved.effectivePath) != null ? _a : resolved.manualPath).setDisabled(true);
+      });
+      if (!resolved.exists && profile.entrySource === "manual") {
+        new import_obsidian7.Setting(containerEl).setName("Home.md \u3092\u4F5C\u6210").setDesc("\u5165\u53E3\u30CE\u30FC\u30C8\u304C\u7121\u3044\u3068\u304D\u3001\u6700\u5C0F\u30C6\u30F3\u30D7\u30EC\u30FC\u30C8\u304B\u3089\u4F5C\u6210\u3057\u307E\u3059\u3002").addButton(
+          (button) => button.setButtonText("\u4F5C\u6210").onClick(() => {
+            void (async () => {
+              try {
+                const path = await createHomeEntryNote(
+                  this.app,
+                  profile.entryNotePath || "Home.md"
+                );
+                new import_obsidian7.Notice(`Vault Atlas: ${path} \u3092\u4F5C\u6210\u3057\u307E\u3057\u305F`);
+                this.display();
+              } catch (error) {
+                const message = error instanceof Error ? error.message : "\u4F5C\u6210\u5931\u6557";
+                new import_obsidian7.Notice(`Vault Atlas: ${message}`);
+              }
+            })();
+          })
+        );
+      }
+    });
+    new import_obsidian7.Setting(containerEl).setName("Entry note path").setDesc("\u624B\u52D5\u30E2\u30FC\u30C9\u6642\u3001\u307E\u305F\u306F Homepage \u3067\u89E3\u6C7A\u3067\u304D\u306A\u3044\u3068\u304D\u306E\u30D5\u30A9\u30FC\u30EB\u30D0\u30C3\u30AF").addText(
       (text) => text.setPlaceholder("Home.md").setValue(profile.entryNotePath).onChange(async (value) => {
         await this.saveProfile({ entryNotePath: value.trim() });
       })
     );
-    new import_obsidian3.Setting(containerEl).setName("Hub type property").setDesc("HUB \u5224\u5B9A frontmatter \u30AD\u30FC").addText(
+    new import_obsidian7.Setting(containerEl).setName("Hub type property").setDesc("HUB \u5224\u5B9A frontmatter \u30AD\u30FC").addText(
       (text) => text.setValue(profile.hubTypeProperty).onChange(async (value) => {
         await this.saveProfile({ hubTypeProperty: value.trim() });
       })
     );
-    new import_obsidian3.Setting(containerEl).setName("Hub type value").setDesc("HUB \u3068\u307F\u306A\u3059\u5024").addText(
+    new import_obsidian7.Setting(containerEl).setName("Hub type value").setDesc("HUB \u3068\u307F\u306A\u3059\u5024").addText(
       (text) => text.setValue(profile.hubTypeValue).onChange(async (value) => {
         await this.saveProfile({ hubTypeValue: value.trim() });
       })
     );
-    new import_obsidian3.Setting(containerEl).setName("Daily folder pattern").setDesc("HUB \u4E0D\u8981\u5019\u88DC\uFF08\u4F8B: 00 Inbox/Daily/\uFF09\u3002\u7A7A\u6B04\u3067\u7121\u52B9\u3002").addText(
+    containerEl.createEl("p", {
+      cls: "setting-item-description",
+      text: "\u624B\u66F8\u304D\u30FB\u4ED6\u30D7\u30E9\u30B0\u30A4\u30F3\u306E HUB \u306F frontmatter \u306B hub-managed: external \u3092\u4ED8\u3051\u308B\u3068 Atlas \u304B\u3089\u524A\u9664\u3067\u304D\u307E\u305B\u3093\u3002Deep Scan \u3067\u3082\u89E6\u3089\u306A\u3044\u8A2D\u5B9A\u304C\u3067\u304D\u307E\u3059\u3002"
+    });
+    new import_obsidian7.Setting(containerEl).setName("Daily folder pattern").setDesc("HUB \u4E0D\u8981\u5019\u88DC\uFF08\u4F8B: 00 Inbox/Daily/\uFF09\u3002\u7A7A\u6B04\u3067\u7121\u52B9\u3002").addText(
       (text) => {
         var _a;
         return text.setPlaceholder("00 Inbox/Daily/").setValue((_a = profile.dailyFolderPattern) != null ? _a : "").onChange(async (value) => {
@@ -888,7 +1473,7 @@ var VaultAtlasSettingTab = class extends import_obsidian3.PluginSettingTab {
         });
       }
     );
-    new import_obsidian3.Setting(containerEl).setName("Exclude folder prefixes").setDesc("1\u884C1\u4EF6\u3002\u30B9\u30AD\u30E3\u30F3\u304B\u3089\u9664\u5916\uFF08\u672B\u5C3E / \u63A8\u5968\uFF09\u3002\u30C7\u30D5\u30A9\u30EB\u30C8\u9664\u5916\u306F\u81EA\u52D5\u3067\u8DB3\u3055\u308C\u307E\u3059\u3002").addTextArea((area) => {
+    new import_obsidian7.Setting(containerEl).setName("Exclude folder prefixes").setDesc("1\u884C1\u4EF6\u3002\u30B9\u30AD\u30E3\u30F3\u304B\u3089\u9664\u5916\uFF08\u672B\u5C3E / \u63A8\u5968\uFF09\u3002\u30C7\u30D5\u30A9\u30EB\u30C8\u9664\u5916\u306F\u81EA\u52D5\u3067\u8DB3\u3055\u308C\u307E\u3059\u3002").addTextArea((area) => {
       area.setValue(profile.excludeFolderPrefixes.join("\n")).onChange(async (value) => {
         await this.saveProfile({
           excludeFolderPrefixes: value.split("\n").map((line) => line.trim()).filter(Boolean)
@@ -899,7 +1484,7 @@ var VaultAtlasSettingTab = class extends import_obsidian3.PluginSettingTab {
   }
   renderScanTab(containerEl) {
     const profile = this.profile();
-    new import_obsidian3.Setting(containerEl).setName("Min markdown for hub").setDesc("\u3053\u306E\u4EF6\u6570\u4EE5\u4E0A\u306E\u30CE\u30FC\u30C8\u304C\u3042\u308B\u30D5\u30A9\u30EB\u30C0\u3092 HUB \u63A8\u5968\u306B\u3059\u308B\uFF08\u65E2\u5B9A 3\uFF09").addText(
+    new import_obsidian7.Setting(containerEl).setName("Min markdown for hub").setDesc("\u3053\u306E\u4EF6\u6570\u4EE5\u4E0A\u306E\u30CE\u30FC\u30C8\u304C\u3042\u308B\u30D5\u30A9\u30EB\u30C0\u3092 HUB \u63A8\u5968\u306B\u3059\u308B\uFF08\u65E2\u5B9A 3\uFF09").addText(
       (text) => text.setPlaceholder("3").setValue(String(profile.minMarkdownForHub)).onChange(async (value) => {
         const parsed = Number.parseInt(value, 10);
         if (!Number.isFinite(parsed) || parsed < 1) {
@@ -908,7 +1493,7 @@ var VaultAtlasSettingTab = class extends import_obsidian3.PluginSettingTab {
         await this.saveProfile({ minMarkdownForHub: parsed });
       })
     );
-    new import_obsidian3.Setting(containerEl).setName("Defer reconsider delta").setDesc("\u4FDD\u7559\u4E2D\u30D5\u30A9\u30EB\u30C0\u306E\u30CE\u30FC\u30C8\u304C\u3053\u306E\u4EF6\u6570\u4EE5\u4E0A\u5897\u3048\u305F\u3089\u300C\u518D\u691C\u8A0E\u300D\u306B\u623B\u3059\uFF08\u65E2\u5B9A 2\uFF09").addText(
+    new import_obsidian7.Setting(containerEl).setName("Defer reconsider delta").setDesc("\u4FDD\u7559\u4E2D\u30D5\u30A9\u30EB\u30C0\u306E\u30CE\u30FC\u30C8\u304C\u3053\u306E\u4EF6\u6570\u4EE5\u4E0A\u5897\u3048\u305F\u3089\u300C\u518D\u691C\u8A0E\u300D\u306B\u623B\u3059\uFF08\u65E2\u5B9A 2\uFF09").addText(
       (text) => text.setPlaceholder("2").setValue(String(profile.deferReconsiderDelta)).onChange(async (value) => {
         const parsed = Number.parseInt(value, 10);
         if (!Number.isFinite(parsed) || parsed < 1) {
@@ -917,12 +1502,20 @@ var VaultAtlasSettingTab = class extends import_obsidian3.PluginSettingTab {
         await this.saveProfile({ deferReconsiderDelta: parsed });
       })
     );
-    new import_obsidian3.Setting(containerEl).setName("Skip root without hub").setDesc("Vault \u30EB\u30FC\u30C8\u306B HUB \u304C\u306A\u304F\u3066\u3082\u8B66\u544A\u3057\u306A\u3044\uFF08Home.md \u304C\u5165\u53E3\u306E\u3068\u304D\uFF09").addToggle(
+    new import_obsidian7.Setting(containerEl).setName("Report export folder").setDesc("\u30EC\u30DD\u30FC\u30C8\u4FDD\u5B58\u5148\uFF08\u672B\u5C3E / \u63A8\u5968\uFF09\u3002\u7121\u3044\u5834\u5408\u306F\u81EA\u52D5\u4F5C\u6210\u3002").addText(
+      (text) => text.setPlaceholder("90 System/Vault Atlas/").setValue(profile.reportExportFolder).onChange(async (value) => {
+        const trimmed = value.trim();
+        await this.saveProfile({
+          reportExportFolder: trimmed.endsWith("/") ? trimmed : `${trimmed}/`
+        });
+      })
+    );
+    new import_obsidian7.Setting(containerEl).setName("Skip root without hub").setDesc("Vault \u30EB\u30FC\u30C8\u306B HUB \u304C\u306A\u304F\u3066\u3082\u8B66\u544A\u3057\u306A\u3044\uFF08Home.md \u304C\u5165\u53E3\u306E\u3068\u304D\uFF09").addToggle(
       (toggle) => toggle.setValue(profile.skipRootWithoutHub).onChange(async (value) => {
         await this.saveProfile({ skipRootWithoutHub: value });
       })
     );
-    new import_obsidian3.Setting(containerEl).setName("Exclude path segments").setDesc("\u30D1\u30B9\u4E2D\u306B\u542B\u307E\u308C\u305F\u3089\u30B9\u30AD\u30C3\u30D7\uFF081\u884C1\u4EF6\u3002\u4F8B: node_modules\uFF09").addTextArea((area) => {
+    new import_obsidian7.Setting(containerEl).setName("Exclude path segments").setDesc("\u30D1\u30B9\u4E2D\u306B\u542B\u307E\u308C\u305F\u3089\u30B9\u30AD\u30C3\u30D7\uFF081\u884C1\u4EF6\u3002\u4F8B: node_modules\uFF09").addTextArea((area) => {
       area.setValue(profile.excludePathSegments.join("\n")).onChange(async (value) => {
         await this.saveProfile({
           excludePathSegments: value.split("\n").map((line) => line.trim()).filter(Boolean)
@@ -936,13 +1529,13 @@ var VaultAtlasSettingTab = class extends import_obsidian3.PluginSettingTab {
       text: "Vault Atlas \u306F\u30ED\u30FC\u30AB\u30EB\u306E\u307F\u3067\u52D5\u4F5C\u3057\u307E\u3059\u3002\u30CD\u30C3\u30C8\u30EF\u30FC\u30AF\u9001\u4FE1\u306F\u3042\u308A\u307E\u305B\u3093\u3002",
       cls: "setting-item-description"
     });
-    new import_obsidian3.Setting(containerEl).setName("Support").setHeading();
-    new import_obsidian3.Setting(containerEl).setName("Buy Me a Coffee").setDesc("K-Tech Studio \u306E\u958B\u767A\u3092\u652F\u63F4\u3059\u308B\uFF08\u4EFB\u610F\uFF09").addButton(
+    new import_obsidian7.Setting(containerEl).setName("Support").setHeading();
+    new import_obsidian7.Setting(containerEl).setName("Buy Me a Coffee").setDesc("K-Tech Studio \u306E\u958B\u767A\u3092\u652F\u63F4\u3059\u308B\uFF08\u4EFB\u610F\uFF09").addButton(
       (button) => button.setButtonText("Buy Me a Coffee").onClick(() => {
         openBuyMeACoffee();
       })
     );
-    new import_obsidian3.Setting(containerEl).setName("Version").setDesc("\u30A4\u30F3\u30B9\u30C8\u30FC\u30EB\u4E2D\u306E\u7248").addText((text) => {
+    new import_obsidian7.Setting(containerEl).setName("Version").setDesc("\u30A4\u30F3\u30B9\u30C8\u30FC\u30EB\u4E2D\u306E\u7248").addText((text) => {
       text.setValue(this.plugin.manifest.version).setDisabled(true);
     });
   }
@@ -951,7 +1544,11 @@ var VaultAtlasSettingTab = class extends import_obsidian3.PluginSettingTab {
 // src/storage.ts
 function parseStorage(raw) {
   if (!raw || typeof raw !== "object") {
-    return { vaultProfile: { ...DEFAULT_VAULT_PROFILE }, hubDeferred: [] };
+    return {
+      vaultProfile: { ...DEFAULT_VAULT_PROFILE },
+      hubDeferred: [],
+      hubProtected: []
+    };
   }
   const data = raw;
   if ("vaultProfile" in data) {
@@ -960,46 +1557,96 @@ function parseStorage(raw) {
         data.vaultProfile
       ),
       hubDeferred: parseHubDeferred(data.hubDeferred),
+      hubProtected: parseHubProtected(data.hubProtected),
       lastSeenVersion: typeof data.lastSeenVersion === "string" ? data.lastSeenVersion : void 0
     };
   }
   return {
     vaultProfile: mergeVaultProfile(data),
     hubDeferred: parseHubDeferred(data.hubDeferred),
+    hubProtected: parseHubProtected(data.hubProtected),
     lastSeenVersion: void 0
   };
 }
-function toStorage(vaultProfile, hubDeferred, lastSeenVersion) {
-  return { vaultProfile, hubDeferred, lastSeenVersion };
+function toStorage(vaultProfile, hubDeferred, hubProtected, lastSeenVersion) {
+  return { vaultProfile, hubDeferred, hubProtected, lastSeenVersion };
 }
 
 // src/ui/atlas-panel.ts
+var import_obsidian15 = require("obsidian");
+
+// src/entry/entry-home-update.ts
 var import_obsidian8 = require("obsidian");
+function wikilink2(hubPath, label) {
+  const noExt = hubPath.replace(/\.md$/i, "");
+  return label ? `[[${noExt}|${label}]]` : `[[${noExt}]]`;
+}
+async function appendHubLinkToEntry(app, entryPath, hubPath) {
+  const entryFile = app.vault.getAbstractFileByPath(entryPath);
+  if (!(entryFile instanceof import_obsidian8.TFile)) {
+    throw new Error(`\u5165\u53E3\u30CE\u30FC\u30C8\u304C\u898B\u3064\u304B\u308A\u307E\u305B\u3093: ${entryPath}`);
+  }
+  const content = await app.vault.read(entryFile);
+  const childNoExt = hubPath.replace(/\.md$/i, "");
+  if (content.includes(`[[${childNoExt}`)) {
+    return;
+  }
+  const hubLabel = folderBasename(hubPath.replace(/\.md$/i, ""));
+  const linkLine = `- ${wikilink2(hubPath, hubLabel)}`;
+  const sectionHeaders = [
+    "## \u3044\u307E\u958B\u304F",
+    "## HUB",
+    "## \u5165\u53E3",
+    "## \u9023\u8F09",
+    "## Quick Lane"
+  ];
+  let insertAt = content.length;
+  for (const header of sectionHeaders) {
+    const idx = content.indexOf(header);
+    if (idx === -1) {
+      continue;
+    }
+    const afterHeader = content.indexOf("\n", idx);
+    if (afterHeader === -1) {
+      continue;
+    }
+    const nextSection = content.indexOf("\n## ", afterHeader + 1);
+    insertAt = nextSection === -1 ? content.length : nextSection;
+    break;
+  }
+  const before = content.slice(0, insertAt).replace(/\s+$/, "");
+  const after = content.slice(insertAt);
+  const updated = `${before}
+${linkLine}
+${after.startsWith("\n") ? after : `
+${after}`}`;
+  await app.vault.modify(entryFile, updated);
+}
 
 // src/hub/hub-delete.ts
-var import_obsidian4 = require("obsidian");
+var import_obsidian9 = require("obsidian");
 async function deleteHubFile(app, hubPath) {
   const file = app.vault.getAbstractFileByPath(hubPath);
-  if (!(file instanceof import_obsidian4.TFile)) {
+  if (!(file instanceof import_obsidian9.TFile)) {
     throw new Error(`HUB \u304C\u898B\u3064\u304B\u308A\u307E\u305B\u3093: ${hubPath}`);
   }
   await app.vault.trash(file);
 }
 
 // src/hub/hub-parent-update.ts
-var import_obsidian5 = require("obsidian");
-function wikilink2(hubPath, label) {
+var import_obsidian10 = require("obsidian");
+function wikilink3(hubPath, label) {
   const noExt = hubPath.replace(/\.md$/i, "");
   return label ? `[[${noExt}|${label}]]` : `[[${noExt}]]`;
 }
 async function appendChildLinkToParentHub(app, parentHubPath, childHubPath) {
   const parentFile = app.vault.getAbstractFileByPath(parentHubPath);
-  if (!(parentFile instanceof import_obsidian5.TFile)) {
+  if (!(parentFile instanceof import_obsidian10.TFile)) {
     throw new Error(`Parent HUB not found: ${parentHubPath}`);
   }
   const content = await app.vault.read(parentFile);
   const childLabel = folderBasename(childHubPath.replace(/\.md$/i, ""));
-  const linkLine = `- \u5B50 HUB: ${wikilink2(childHubPath, childLabel)}`;
+  const linkLine = `- \u5B50 HUB: ${wikilink3(childHubPath, childLabel)}`;
   const childNoExt = childHubPath.replace(/\.md$/i, "");
   if (content.includes(`[[${childNoExt}`)) {
     return;
@@ -1029,11 +1676,11 @@ ${after}`}`;
 }
 
 // src/hub/hub-create.ts
-var import_obsidian6 = require("obsidian");
+var import_obsidian11 = require("obsidian");
 async function listNonHubMarkdown(app, folder, profile) {
   const paths = [];
   for (const child of folder.children) {
-    if (!(child instanceof import_obsidian6.TFile) || child.extension !== "md") {
+    if (!(child instanceof import_obsidian11.TFile) || child.extension !== "md") {
       continue;
     }
     const content = await app.vault.read(child);
@@ -1043,14 +1690,14 @@ async function listNonHubMarkdown(app, folder, profile) {
   }
   return paths;
 }
-async function createHubForFolder(app, folderPath, profile, parentHubPath) {
+async function createHubForFolder(app, folderPath, profile, parentHubPath, entryNotePath) {
   const hubPath = suggestHubPath(folderPath);
   const existing = app.vault.getAbstractFileByPath(hubPath);
   if (existing) {
     throw new Error(`Already exists: ${hubPath}`);
   }
   const folder = app.vault.getAbstractFileByPath(folderPath);
-  if (!(folder instanceof import_obsidian6.TFolder)) {
+  if (!(folder instanceof import_obsidian11.TFolder)) {
     throw new Error(`Folder not found: ${folderPath}`);
   }
   const childNotePaths = await listNonHubMarkdown(app, folder, profile);
@@ -1058,11 +1705,56 @@ async function createHubForFolder(app, folderPath, profile, parentHubPath) {
     folderPath,
     hubPath,
     parentHubPath,
-    entryNotePath: profile.entryNotePath,
+    entryNotePath: entryNotePath != null ? entryNotePath : profile.entryNotePath,
     childNotePaths
   });
   await app.vault.create(hubPath, content);
   return hubPath;
+}
+
+// src/report/report-export.ts
+var import_obsidian12 = require("obsidian");
+function buildReportFileName(generatedAt) {
+  const datePart = generatedAt.slice(0, 10);
+  const timePart = generatedAt.slice(11, 19).replace(/:/g, "");
+  return `Vault Atlas Report ${datePart}${timePart ? `-${timePart}` : ""}.md`;
+}
+async function ensureFolder(app, folderPath) {
+  const normalized = normalizeFolderPath(folderPath).replace(/\/$/, "");
+  if (!normalized) {
+    return;
+  }
+  const parts = normalized.split("/");
+  let current = "";
+  for (const part of parts) {
+    current = current ? `${current}/${part}` : part;
+    const existing = app.vault.getAbstractFileByPath(current);
+    if (!existing) {
+      await app.vault.createFolder(current);
+    }
+  }
+}
+function resolveUniquePath(app, folderPath, fileName) {
+  const base = normalizeFolderPath(folderPath);
+  let candidate = `${base}${fileName}`;
+  let index = 2;
+  while (app.vault.getAbstractFileByPath(candidate)) {
+    const stem = fileName.replace(/\.md$/i, "");
+    candidate = `${base}${stem} (${index}).md`;
+    index += 1;
+  }
+  return candidate;
+}
+async function exportReportToVault(app, markdown, exportFolder, generatedAt) {
+  const folder = normalizeFolderPath(exportFolder || "Vault Atlas/");
+  await ensureFolder(app, folder);
+  const fileName = buildReportFileName(generatedAt);
+  const filePath = resolveUniquePath(app, folder, fileName);
+  const created = await app.vault.create(filePath, markdown);
+  if (!(created instanceof import_obsidian12.TFile)) {
+    throw new Error(`\u30EC\u30DD\u30FC\u30C8\u3092\u4FDD\u5B58\u3067\u304D\u307E\u305B\u3093: ${filePath}`);
+  }
+  return created.path;
 }
 
 // src/scan/report.ts
@@ -1087,8 +1779,35 @@ function formatReportMarkdown(result) {
     `- HUB \u4FDD\u7559\u4E2D: ${result.deferredWaiting.length}`,
     `- \u4EFB\u610F\uFF08\u89AA HUB \u3067\u8DB3\u308A\u308B\u7B49\uFF09: ${result.optionalCount}`,
     `- \u9664\u5916\u30B9\u30AD\u30C3\u30D7: ${result.skippedExcluded}`,
+    `- \u5165\u53E3: ${result.entryInfo.displayLabel}${result.entryInfo.exists ? "" : "\uFF08\u672A\u4F5C\u6210\uFF09"}`,
+    `- \u5165\u53E3\u672A\u30EA\u30F3\u30AF HUB: ${result.entryUnlinkedHubs.length}`,
+    `- \u30B9\u30AD\u30E3\u30F3\u7A2E\u5225: ${result.scanMode === "deep" ? "Deep Scan" : "\u901A\u5E38"}`,
     ""
   ];
+  if (result.excludeSuggestions.length > 0) {
+    lines.push("## \u9664\u5916\u30D5\u30A9\u30EB\u30C0\u5019\u88DC", "");
+    for (const item of result.excludeSuggestions) {
+      lines.push(
+        `- \`${item.prefix}\` \u2014 ${item.reason}\uFF08md: ${item.markdownCount}\uFF09`
+      );
+    }
+    lines.push("");
+  }
+  if (result.hubReviewItems.length > 0) {
+    lines.push("## HUB \u7BA1\u7406\u7BC4\u56F2", "");
+    for (const item of result.hubReviewItems) {
+      const lockNote = item.locked ? `\uFF08\u30ED\u30C3\u30AF: ${item.lockReasonLabel}\uFF09` : item.protectSuggested ? "\uFF08\u4FDD\u8B77\u63A8\u5968\uFF09" : "\uFF08Atlas \u7BA1\u7406\u53EF\uFF09";
+      lines.push(`- \`${item.folderPath}\` \u2192 \`${item.hubPath}\`${lockNote}`);
+    }
+    lines.push("");
+  }
+  if (result.entryUnlinkedHubs.length > 0) {
+    lines.push("## \u5165\u53E3\u672A\u30EA\u30F3\u30AF HUB", "");
+    for (const hub of result.entryUnlinkedHubs) {
+      lines.push(`- \u26A0\uFE0F \`${hub.folderPath}\` \u2192 \`${hub.hubPath}\``);
+    }
+    lines.push("");
+  }
   if (result.reconsideredHubs.length > 0) {
     lines.push("## HUB \u518D\u691C\u8A0E", "");
     for (const hub of result.reconsideredHubs) {
@@ -1132,8 +1851,35 @@ function formatReportMarkdown(result) {
     }
     lines.push("");
   }
+  const guide = result.folderGuide;
+  if (guide.emptyFolders.length > 0 || guide.subfolderOnly.length > 0 || guide.namingDrift.length > 0) {
+    lines.push("## Folder Guide", "");
+    if (guide.emptyFolders.length > 0) {
+      lines.push("### \u7A7A\u30D5\u30A9\u30EB\u30C0", "");
+      for (const item of guide.emptyFolders) {
+        lines.push(`- \`${item.folderPath}\` \u2014 ${item.detail}`);
+      }
+      lines.push("");
+    }
+    if (guide.subfolderOnly.length > 0) {
+      lines.push("### \u6574\u7406\u5019\u88DC\uFF08\u30B5\u30D6\u30D5\u30A9\u30EB\u30C0\u306E\u307F\uFF09", "");
+      for (const item of guide.subfolderOnly) {
+        lines.push(`- \`${item.folderPath}\` \u2014 ${item.detail}`);
+      }
+      lines.push("");
+    }
+    if (guide.namingDrift.length > 0) {
+      lines.push("### \u547D\u540D\u3086\u308C", "");
+      for (const group of guide.namingDrift) {
+        lines.push(
+          `- \`${group.parentPath}\`: ${group.folders.map((name) => `\`${name}\``).join(" / ")} \u2014 ${group.reason}`
+        );
+      }
+      lines.push("");
+    }
+  }
   const otherFindings = result.findings.filter(
-    (f) => f.code !== "HUB_RECOMMENDED"
+    (f) => f.code !== "HUB_RECOMMENDED" && f.code !== "FOLDER_EMPTY" && f.code !== "FOLDER_SUBFOLDER_ONLY" && f.code !== "FOLDER_NAMING_DRIFT"
   );
   if (otherFindings.length > 0) {
     lines.push("## \u305D\u306E\u4ED6", "");
@@ -1192,13 +1938,16 @@ function buildAtlasPanelRows(result) {
     if (hub.linkedFromParent) {
       flags.push("\u89AA\u304B\u3089\u30EA\u30F3\u30AF\u6E08");
     }
+    if (hub.locked) {
+      flags.push(`\u30ED\u30C3\u30AF: ${hub.lockReasonLabel}`);
+    }
     byPath.set(hub.folderPath, {
       folderPath: hub.folderPath,
       hubPath: hub.hubPath,
       suggestedPath: hub.hubPath,
       status: "existing",
       wantHub: true,
-      locked: false,
+      locked: hub.locked,
       desc: flags.join(" / "),
       markdownCount: hub.markdownCount,
       parentHubPath: hub.parentHubPath,
@@ -1264,14 +2013,14 @@ function statusLabel(status) {
 }
 
 // src/ui/confirm-modal.ts
-var import_obsidian7 = require("obsidian");
+var import_obsidian13 = require("obsidian");
 function confirmAtlasAction(app, options) {
   return new Promise((resolve) => {
     const modal = new ConfirmModal(app, options, resolve);
     modal.open();
   });
 }
-var ConfirmModal = class extends import_obsidian7.Modal {
+var ConfirmModal = class extends import_obsidian13.Modal {
   constructor(app, options, resolve) {
     super(app);
     this.options = options;
@@ -1284,7 +2033,7 @@ var ConfirmModal = class extends import_obsidian7.Modal {
       text: this.options.message,
       cls: "vault-atlas-confirm-message"
     });
-    new import_obsidian7.Setting(contentEl).addButton(
+    new import_obsidian13.Setting(contentEl).addButton(
       (btn) => {
         var _a;
         return btn.setButtonText((_a = this.options.cancelLabel) != null ? _a : "\u30AD\u30E3\u30F3\u30BB\u30EB").onClick(() => {
@@ -1304,11 +2053,151 @@ var ConfirmModal = class extends import_obsidian7.Modal {
   }
 };
 
-// src/ui/atlas-panel.ts
-var AtlasPanel = class extends import_obsidian8.Modal {
-  constructor(app, plugin) {
+// src/ui/deep-scan-modal.ts
+var import_obsidian14 = require("obsidian");
+var DeepScanModal = class extends import_obsidian14.Modal {
+  constructor(app, plugin, result, onComplete) {
     super(app);
     this.plugin = plugin;
+    this.result = result;
+    this.onComplete = onComplete;
+    this.protectState = /* @__PURE__ */ new Map();
+    this.excludeState = /* @__PURE__ */ new Map();
+  }
+  onOpen() {
+    const { contentEl, titleEl, modalEl } = this;
+    titleEl.setText("Deep Scan");
+    contentEl.empty();
+    contentEl.addClass("vault-atlas-deep-scan");
+    modalEl.addClass("vault-atlas-deep-scan-modal");
+    contentEl.createEl("p", {
+      cls: "setting-item-description",
+      text: "Vault \u5168\u4F53\u306E\u898B\u76F4\u3057\u3067\u3059\u3002\u89E6\u3089\u306A\u3044 HUB \u3068\u9664\u5916\u30D5\u30A9\u30EB\u30C0\u3092\u9078\u3073\u3001\u4FDD\u5B58\u5F8C\u306B\u901A\u5E38\u30B9\u30AD\u30E3\u30F3\u3078\u623B\u308A\u307E\u3059\u3002"
+    });
+    this.initState();
+    this.renderHubSection(contentEl);
+    this.renderExcludeSection(contentEl);
+    this.renderActions(contentEl);
+  }
+  initState() {
+    for (const item of this.result.hubReviewItems) {
+      this.protectState.set(
+        item.folderPath,
+        item.locked || item.protectSuggested
+      );
+    }
+    for (const item of this.result.excludeSuggestions) {
+      this.excludeState.set(item.prefix, true);
+    }
+  }
+  renderHubSection(containerEl) {
+    containerEl.createEl("h3", { text: "\u65E2\u5B58 HUB" });
+    if (this.result.hubReviewItems.length === 0) {
+      containerEl.createEl("p", {
+        text: "\u898B\u76F4\u3057\u5BFE\u8C61\u306E HUB \u304C\u3042\u308A\u307E\u305B\u3093\u3002",
+        cls: "setting-item-description"
+      });
+      return;
+    }
+    for (const item of this.result.hubReviewItems) {
+      const label = item.folderPath || "(root)";
+      const descParts = [item.hubPath];
+      if (item.hubManaged) {
+        descParts.push(`${item.hubManaged}`);
+      }
+      if (item.locked) {
+        descParts.push(`\u30ED\u30C3\u30AF: ${item.lockReasonLabel}`);
+      } else {
+        descParts.push("OFF = Atlas \u3067\u7BA1\u7406\uFF08\u524A\u9664\u53EF\uFF09 / ON = \u89E6\u3089\u306A\u3044");
+      }
+      const setting = new import_obsidian14.Setting(containerEl).setName(label).setDesc(descParts.join(" / ")).addToggle((toggle) => {
+        var _a;
+        const protect = (_a = this.protectState.get(item.folderPath)) != null ? _a : true;
+        toggle.setValue(protect);
+        if (item.locked) {
+          toggle.setDisabled(true);
+        } else {
+          toggle.onChange((on) => {
+            this.protectState.set(item.folderPath, on);
+          });
+        }
+      });
+      setting.settingEl.addClass("vault-atlas-hub-row");
+      if (item.locked) {
+        setting.settingEl.addClass("vault-atlas-hub-row-locked");
+      }
+    }
+  }
+  renderExcludeSection(containerEl) {
+    containerEl.createEl("h3", { text: "\u9664\u5916\u30D5\u30A9\u30EB\u30C0\u5019\u88DC" });
+    if (this.result.excludeSuggestions.length === 0) {
+      containerEl.createEl("p", {
+        text: "\u65B0\u3057\u3044\u9664\u5916\u5019\u88DC\u306F\u3042\u308A\u307E\u305B\u3093\u3002",
+        cls: "setting-item-description"
+      });
+      return;
+    }
+    for (const item of this.result.excludeSuggestions) {
+      new import_obsidian14.Setting(containerEl).setName(item.prefix).setDesc(`${item.reason}\uFF08md: ${item.markdownCount}\uFF09`).addToggle((toggle) => {
+        var _a;
+        toggle.setValue((_a = this.excludeState.get(item.prefix)) != null ? _a : false);
+        toggle.onChange((on) => {
+          this.excludeState.set(item.prefix, on);
+        });
+      });
+    }
+  }
+  renderActions(containerEl) {
+    const actions = containerEl.createDiv({ cls: "vault-atlas-panel-actions" });
+    actions.createEl("button", {
+      cls: "mod-cta",
+      text: "\u4FDD\u5B58\u3057\u3066\u53CD\u6620",
+      type: "button"
+    }).addEventListener("click", () => {
+      void this.saveReview();
+    });
+    actions.createEl("button", {
+      text: "\u30AD\u30E3\u30F3\u30BB\u30EB",
+      type: "button"
+    }).addEventListener("click", () => {
+      this.close();
+    });
+  }
+  collectReview() {
+    var _a;
+    const protectedFolderPaths = [];
+    for (const item of this.result.hubReviewItems) {
+      const protect = item.locked || ((_a = this.protectState.get(item.folderPath)) != null ? _a : true);
+      if (protect) {
+        protectedFolderPaths.push(item.folderPath);
+      }
+    }
+    const excludePrefixes = this.result.excludeSuggestions.filter((item) => this.excludeState.get(item.prefix)).map((item) => item.prefix);
+    return { protectedFolderPaths, excludePrefixes };
+  }
+  async saveReview() {
+    const review = this.collectReview();
+    try {
+      await this.plugin.applyDeepScanReview(review);
+      new import_obsidian14.Notice("Vault Atlas: Deep Scan \u3092\u4FDD\u5B58\u3057\u307E\u3057\u305F");
+      this.close();
+      this.onComplete();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "\u4FDD\u5B58\u306B\u5931\u6557\u3057\u307E\u3057\u305F";
+      new import_obsidian14.Notice(`Vault Atlas: ${message}`);
+    }
+  }
+  onClose() {
+    this.contentEl.empty();
+  }
+};
+
+// src/ui/atlas-panel.ts
+var AtlasPanel = class extends import_obsidian15.Modal {
+  constructor(app, plugin, openOptions = {}) {
+    super(app);
+    this.plugin = plugin;
+    this.openOptions = openOptions;
     this.result = null;
     this.scanning = false;
     this.appendParentLinks = true;
@@ -1322,7 +2211,19 @@ var AtlasPanel = class extends import_obsidian8.Modal {
     this.headerEl = contentEl.createDiv({ cls: "vault-atlas-panel-header" });
     this.bodyEl = contentEl.createDiv({ cls: "vault-atlas-panel-body" });
     this.renderHeaderShell();
-    void this.rescan(false);
+    void this.bootstrapScan();
+  }
+  async bootstrapScan() {
+    await this.rescan(false);
+    if (this.openOptions.deepScan) {
+      await this.runDeepScan(false);
+      return;
+    }
+    if (this.plugin.shouldOfferInitialDeepScan()) {
+      new import_obsidian15.Notice(
+        "Vault Atlas: \u521D\u56DE\u306E Deep Scan \u3092\u304A\u3059\u3059\u3081\u3057\u307E\u3059\uFF08\u30D8\u30C3\u30C0\u30FC\u306E Deep Scan\uFF09"
+      );
+    }
   }
   renderHeaderShell() {
     this.headerEl.empty();
@@ -1339,11 +2240,24 @@ var AtlasPanel = class extends import_obsidian8.Modal {
     this.rescanBtnEl.addEventListener("click", () => {
       void this.rescan(true);
     });
+    this.deepScanBtnEl = actions.createEl("button", {
+      text: "Deep Scan",
+      type: "button"
+    });
+    this.deepScanBtnEl.addEventListener("click", () => {
+      void this.runDeepScan(true);
+    });
     actions.createEl("button", {
-      text: "Markdown",
+      text: "\u30B3\u30D4\u30FC",
       type: "button"
     }).addEventListener("click", () => {
-      void this.showMarkdownReport();
+      void this.copyMarkdownReport();
+    });
+    actions.createEl("button", {
+      text: "\u30EC\u30DD\u30FC\u30C8\u4FDD\u5B58",
+      type: "button"
+    }).addEventListener("click", () => {
+      void this.saveMarkdownReport();
     });
   }
   updateSummary() {
@@ -1352,13 +2266,15 @@ var AtlasPanel = class extends import_obsidian8.Modal {
       return;
     }
     summaryEl.setText(
-      `HUB ${this.result.hubCount} \u4EF6 / \u63A8\u5968 ${this.result.recommendedHubs.length} / \u518D\u691C\u8A0E ${this.result.reconsideredHubs.length} / \u4FDD\u7559 ${this.result.deferredWaiting.length} / \u30EA\u30F3\u30AF\u4E0D\u8DB3 ${this.result.linkGaps.length}`
+      `HUB ${this.result.hubCount} \u4EF6 / \u63A8\u5968 ${this.result.recommendedHubs.length} / \u518D\u691C\u8A0E ${this.result.reconsideredHubs.length} / \u4FDD\u7559 ${this.result.deferredWaiting.length} / \u89AA\u30EA\u30F3\u30AF\u4E0D\u8DB3 ${this.result.linkGaps.length} / \u5165\u53E3\u672A\u30EA\u30F3\u30AF ${this.result.entryUnlinkedHubs.length}`
     );
   }
   setScanning(scanning) {
     this.scanning = scanning;
     this.rescanBtnEl.disabled = scanning;
+    this.deepScanBtnEl.disabled = scanning;
     this.rescanBtnEl.setText(scanning ? "\u30B9\u30AD\u30E3\u30F3\u4E2D\u2026" : "\u518D\u30B9\u30AD\u30E3\u30F3");
+    this.deepScanBtnEl.setText(scanning ? "Deep Scan\u4E2D\u2026" : "Deep Scan");
   }
   async rescan(notify) {
     if (this.scanning) {
@@ -1366,16 +2282,37 @@ var AtlasPanel = class extends import_obsidian8.Modal {
     }
     this.setScanning(true);
     try {
-      this.result = await this.plugin.scanVault();
+      this.result = await this.plugin.scanVault("quick");
       this.renderBody();
       this.updateSummary();
       if (notify) {
-        new import_obsidian8.Notice("Vault Atlas: \u30B9\u30AD\u30E3\u30F3\u5B8C\u4E86");
+        new import_obsidian15.Notice("Vault Atlas: \u901A\u5E38\u30B9\u30AD\u30E3\u30F3\u5B8C\u4E86");
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown scan error";
-      new import_obsidian8.Notice(`Vault Atlas: \u30B9\u30AD\u30E3\u30F3\u5931\u6557 \u2014 ${message}`);
+      new import_obsidian15.Notice(`Vault Atlas: \u30B9\u30AD\u30E3\u30F3\u5931\u6557 \u2014 ${message}`);
     } finally {
+      this.setScanning(false);
+    }
+  }
+  async runDeepScan(notify) {
+    if (this.scanning) {
+      return;
+    }
+    this.setScanning(true);
+    try {
+      const deepResult = await this.plugin.scanVault("deep");
+      this.setScanning(false);
+      const modal = new DeepScanModal(this.app, this.plugin, deepResult, () => {
+        void this.rescan(false);
+      });
+      modal.open();
+      if (notify) {
+        new import_obsidian15.Notice("Vault Atlas: Deep Scan \u3092\u958B\u304D\u307E\u3057\u305F");
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown scan error";
+      new import_obsidian15.Notice(`Vault Atlas: Deep Scan \u5931\u6557 \u2014 ${message}`);
       this.setScanning(false);
     }
   }
@@ -1388,8 +2325,9 @@ var AtlasPanel = class extends import_obsidian8.Modal {
     const rows = buildAtlasPanelRows(this.result);
     this.bodyEl.createEl("p", {
       cls: "setting-item-description",
-      text: "\u30C8\u30B0\u30EB ON = HUB \u3042\u308A\uFF08\u7121\u3051\u308C\u3070\u4F5C\u6210\uFF09 / OFF = HUB \u3092\u524A\u9664\u3057\u3066\u4FDD\u7559\u3002\u518D\u30B9\u30AD\u30E3\u30F3\u5F8C\u3001ON \u3067\u4F5C\u308A\u76F4\u305B\u307E\u3059\u3002"
+      text: "\u901A\u5E38\u30B9\u30AD\u30E3\u30F3: \u30C8\u30B0\u30EB ON = HUB \u3042\u308A / OFF = \u524A\u9664\u3057\u3066\u4FDD\u7559\u3002\u30ED\u30C3\u30AF\u4ED8\u304D HUB \u306F\u524A\u9664\u3067\u304D\u307E\u305B\u3093\u3002Deep Scan \u3067\u7BA1\u7406\u7BC4\u56F2\u3092\u898B\u76F4\u305B\u307E\u3059\u3002"
     });
+    this.renderEntrySection();
     if (rows.length === 0) {
       this.bodyEl.createEl("p", { text: "\u8868\u793A\u3059\u308B\u30D5\u30A9\u30EB\u30C0\u304C\u3042\u308A\u307E\u305B\u3093\u3002" });
     } else {
@@ -1398,7 +2336,7 @@ var AtlasPanel = class extends import_obsidian8.Modal {
         this.renderRowIn(this.bodyEl, row);
       }
     }
-    const linkSetting = new import_obsidian8.Setting(this.bodyEl).setName("\u89AA HUB \u306B\u30EA\u30F3\u30AF\u3092\u8FFD\u8A18").setDesc("\u30C8\u30B0\u30EB ON \u3067 HUB \u3092\u65B0\u898F\u4F5C\u6210\u3059\u308B\u3068\u304D\u3001\u89AA\u3078\u30A6\u30A3\u30AD\u30EA\u30F3\u30AF\u3092\u8DB3\u3059").addToggle(
+    const linkSetting = new import_obsidian15.Setting(this.bodyEl).setName("\u89AA HUB \u306B\u30EA\u30F3\u30AF\u3092\u8FFD\u8A18").setDesc("\u30C8\u30B0\u30EB ON \u3067 HUB \u3092\u65B0\u898F\u4F5C\u6210\u3059\u308B\u3068\u304D\u3001\u89AA\u3078\u30A6\u30A3\u30AD\u30EA\u30F3\u30AF\u3092\u8DB3\u3059").addToggle(
       (toggle) => toggle.setValue(this.appendParentLinks).onChange((on) => {
         this.appendParentLinks = on;
       })
@@ -1410,7 +2348,7 @@ var AtlasPanel = class extends import_obsidian8.Modal {
       for (const gap of this.result.linkGaps) {
         ul.createEl("li", { text: `${gap.folderPath}: ${gap.message}` });
       }
-      new import_obsidian8.Setting(this.bodyEl).addButton(
+      new import_obsidian15.Setting(this.bodyEl).addButton(
         (btn) => btn.setButtonText("\u89AA HUB \u306B\u30EA\u30F3\u30AF\u3092\u8FFD\u8A18").onClick(() => {
           void this.fixLinkGaps();
         })
@@ -1419,6 +2357,7 @@ var AtlasPanel = class extends import_obsidian8.Modal {
     const warnings = this.result.findings.filter(
       (f) => (f.severity === "warn" || f.severity === "gap") && f.code !== "HUB_LINK_GAP" && f.code !== "HUB_RECOMMENDED" && f.code !== "HUB_RECONSIDER"
     );
+    this.renderFolderGuideSection();
     if (warnings.length > 0) {
       const details = this.bodyEl.createEl("details");
       details.createEl("summary", { text: "\u78BA\u8A8D\u4E8B\u9805" });
@@ -1428,22 +2367,110 @@ var AtlasPanel = class extends import_obsidian8.Modal {
       }
     }
   }
+  renderFolderGuideSection() {
+    if (!this.result) {
+      return;
+    }
+    const guide = this.result.folderGuide;
+    const hasGuide = guide.emptyFolders.length > 0 || guide.subfolderOnly.length > 0 || guide.namingDrift.length > 0;
+    if (!hasGuide) {
+      return;
+    }
+    this.bodyEl.createEl("h3", { text: "Folder Guide" });
+    this.bodyEl.createEl("p", {
+      cls: "setting-item-description",
+      text: "\u5831\u544A\u306E\u307F\u3002\u30D5\u30A9\u30EB\u30C0\u306E\u81EA\u52D5\u5909\u66F4\u306F\u884C\u3044\u307E\u305B\u3093\u3002"
+    });
+    if (guide.emptyFolders.length > 0) {
+      this.bodyEl.createEl("h4", { text: "\u7A7A\u30D5\u30A9\u30EB\u30C0" });
+      const ul = this.bodyEl.createEl("ul");
+      for (const item of guide.emptyFolders) {
+        ul.createEl("li", { text: `${item.folderPath}: ${item.detail}` });
+      }
+    }
+    if (guide.subfolderOnly.length > 0) {
+      this.bodyEl.createEl("h4", { text: "\u6574\u7406\u5019\u88DC\uFF08\u30B5\u30D6\u30D5\u30A9\u30EB\u30C0\u306E\u307F\uFF09" });
+      const ul = this.bodyEl.createEl("ul");
+      for (const item of guide.subfolderOnly) {
+        ul.createEl("li", { text: `${item.folderPath}: ${item.detail}` });
+      }
+    }
+    if (guide.namingDrift.length > 0) {
+      this.bodyEl.createEl("h4", { text: "\u547D\u540D\u3086\u308C" });
+      const ul = this.bodyEl.createEl("ul");
+      for (const group of guide.namingDrift) {
+        ul.createEl("li", {
+          text: `${group.parentPath}: ${group.folders.join(" / ")} \u2014 ${group.reason}`
+        });
+      }
+    }
+  }
+  renderEntrySection() {
+    if (!this.result) {
+      return;
+    }
+    const { entryInfo, entryUnlinkedHubs } = this.result;
+    this.bodyEl.createEl("h3", { text: "\u5165\u53E3" });
+    this.bodyEl.createEl("p", {
+      cls: "setting-item-description",
+      text: entryInfo.exists ? entryInfo.displayLabel : `${entryInfo.displayLabel} \u2014 \u30D5\u30A1\u30A4\u30EB\u672A\u4F5C\u6210`
+    });
+    if (!entryInfo.exists && entryInfo.source === "manual") {
+      new import_obsidian15.Setting(this.bodyEl).setName("Home.md \u3092\u4F5C\u6210").setDesc("\u5165\u53E3\u30CE\u30FC\u30C8\u304C\u7121\u3044\u3068\u304D\u3001\u6700\u5C0F\u30C6\u30F3\u30D7\u30EC\u30FC\u30C8\u304B\u3089\u4F5C\u6210\u3057\u307E\u3059\u3002").addButton(
+        (button) => button.setButtonText("\u4F5C\u6210").onClick(() => {
+          void (async () => {
+            try {
+              const path = await createHomeEntryNote(
+                this.app,
+                entryInfo.manualPath
+              );
+              new import_obsidian15.Notice(`Vault Atlas: ${path} \u3092\u4F5C\u6210\u3057\u307E\u3057\u305F`);
+              await this.rescan(false);
+            } catch (error) {
+              const message = error instanceof Error ? error.message : "\u4F5C\u6210\u5931\u6557";
+              new import_obsidian15.Notice(`Vault Atlas: ${message}`);
+            }
+          })();
+        })
+      );
+    }
+    if (entryUnlinkedHubs.length > 0) {
+      this.bodyEl.createEl("h4", { text: "\u5165\u53E3\u304B\u3089\u672A\u30EA\u30F3\u30AF\u306E HUB" });
+      const ul = this.bodyEl.createEl("ul");
+      for (const hub of entryUnlinkedHubs) {
+        ul.createEl("li", { text: `${hub.label} \u2192 ${hub.hubPath}` });
+      }
+      new import_obsidian15.Setting(this.bodyEl).addButton(
+        (btn) => btn.setButtonText("\u5165\u53E3\u306B\u30EA\u30F3\u30AF\u3092\u8FFD\u8A18").onClick(() => {
+          void this.fixEntryUnlinkedHubs();
+        })
+      );
+    }
+  }
   renderRowIn(containerEl, row) {
     const desc = `[${statusLabel(row.status)}] ${row.desc}${row.hubPath ? ` \u2192 ${row.hubPath}` : ""}`;
-    const setting = new import_obsidian8.Setting(containerEl).setName(row.folderPath || "(root)").setDesc(desc).addToggle((toggle) => {
+    const setting = new import_obsidian15.Setting(containerEl).setName(row.folderPath || "(root)").setDesc(desc).addToggle((toggle) => {
       toggle.setValue(row.wantHub);
-      toggle.onChange((on) => {
-        void this.applyToggle(row, on, () => {
-          toggle.setValue(!on);
+      if (row.locked && row.wantHub) {
+        toggle.setDisabled(true);
+      } else {
+        toggle.onChange((on) => {
+          void this.applyToggle(row, on, () => {
+            toggle.setValue(!on);
+          });
         });
-      });
+      }
     });
     setting.settingEl.addClass("vault-atlas-hub-row");
     if (row.status === "existing") {
       setting.settingEl.addClass("vault-atlas-hub-row-existing");
     }
+    if (row.locked) {
+      setting.settingEl.addClass("vault-atlas-hub-row-locked");
+    }
   }
   async applyToggle(row, wantHub, revert) {
+    var _a, _b;
     try {
       if (wantHub) {
         if (row.hubPath) {
@@ -1462,22 +2489,35 @@ var AtlasPanel = class extends import_obsidian8.Modal {
           return;
         }
         const profile = this.plugin.settings.vaultProfile;
+        const entryPath = (_b = (_a = this.result) == null ? void 0 : _a.entryInfo.effectivePath) != null ? _b : await this.plugin.getEffectiveEntryPath();
         const hubPath = await createHubForFolder(
           this.app,
           row.folderPath,
           profile,
-          row.parentHubPath
+          row.parentHubPath,
+          entryPath
         );
         await this.plugin.clearDefer(row.folderPath);
-        if (this.appendParentLinks && row.parentHubFile && !row.parentLinksToChild) {
-          await appendChildLinkToParentHub(
-            this.app,
-            row.parentHubFile,
-            hubPath
-          );
+        if (this.appendParentLinks) {
+          if (row.parentHubFile && !row.parentLinksToChild) {
+            await appendChildLinkToParentHub(
+              this.app,
+              row.parentHubFile,
+              hubPath
+            );
+          } else if (!row.parentHubFile && row.parentHubPath && row.parentHubPath === entryPath) {
+            await appendHubLinkToEntry(this.app, entryPath, hubPath);
+          }
         }
-        new import_obsidian8.Notice(`Vault Atlas: ${hubPath} \u3092\u4F5C\u6210\u3057\u307E\u3057\u305F`);
+        new import_obsidian15.Notice(`Vault Atlas: ${hubPath} \u3092\u4F5C\u6210\u3057\u307E\u3057\u305F`);
       } else {
+        if (row.locked && row.hubPath) {
+          new import_obsidian15.Notice(
+            `Vault Atlas: ${row.hubPath} \u306F\u30ED\u30C3\u30AF\u4E2D\u306E\u305F\u3081\u524A\u9664\u3067\u304D\u307E\u305B\u3093`
+          );
+          revert();
+          return;
+        }
         if (row.hubPath) {
           const confirmed = await confirmAtlasAction(this.app, {
             title: "HUB \u3092\u524A\u9664",
@@ -1495,7 +2535,7 @@ var AtlasPanel = class extends import_obsidian8.Modal {
             row.folderPath,
             row.markdownCount > 0 ? row.markdownCount : 1
           );
-          new import_obsidian8.Notice(
+          new import_obsidian15.Notice(
             `Vault Atlas: ${row.hubPath} \u3092\u524A\u9664\u3057\u307E\u3057\u305F\u3002\u518D\u30B9\u30AD\u30E3\u30F3\u5F8C\u3001\u30C8\u30B0\u30EB ON \u3067\u4F5C\u308A\u76F4\u305B\u307E\u3059\u3002`
           );
         } else {
@@ -1505,9 +2545,31 @@ var AtlasPanel = class extends import_obsidian8.Modal {
       await this.rescan(false);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
-      new import_obsidian8.Notice(`Vault Atlas: ${row.folderPath} \u2014 ${message}`);
+      new import_obsidian15.Notice(`Vault Atlas: ${row.folderPath} \u2014 ${message}`);
       revert();
     }
+  }
+  async fixEntryUnlinkedHubs() {
+    if (!this.result) {
+      return;
+    }
+    const entryPath = this.result.entryInfo.effectivePath;
+    if (!entryPath || !this.result.entryInfo.exists) {
+      new import_obsidian15.Notice("Vault Atlas: \u5165\u53E3\u30CE\u30FC\u30C8\u304C\u3042\u308A\u307E\u305B\u3093");
+      return;
+    }
+    let fixed = 0;
+    for (const hub of this.result.entryUnlinkedHubs) {
+      try {
+        await appendHubLinkToEntry(this.app, entryPath, hub.hubPath);
+        fixed += 1;
+      } catch (e) {
+      }
+    }
+    if (fixed > 0) {
+      new import_obsidian15.Notice(`Vault Atlas: \u5165\u53E3\u306B ${fixed} \u4EF6\u30EA\u30F3\u30AF\u3092\u8FFD\u8A18`);
+    }
+    await this.rescan(false);
   }
   async fixLinkGaps() {
     if (!this.result) {
@@ -1526,23 +2588,47 @@ var AtlasPanel = class extends import_obsidian8.Modal {
       }
     }
     if (fixed > 0) {
-      new import_obsidian8.Notice(`Vault Atlas: \u89AA HUB \u306B ${fixed} \u4EF6\u30EA\u30F3\u30AF\u3092\u8FFD\u8A18`);
+      new import_obsidian15.Notice(`Vault Atlas: \u89AA HUB \u306B ${fixed} \u4EF6\u30EA\u30F3\u30AF\u3092\u8FFD\u8A18`);
     }
     await this.rescan(false);
   }
-  async showMarkdownReport() {
+  async getReportMarkdown() {
     if (!this.result) {
       await this.rescan(false);
     }
     if (!this.result) {
+      return null;
+    }
+    return formatReportMarkdown(this.result);
+  }
+  async copyMarkdownReport() {
+    const markdown = await this.getReportMarkdown();
+    if (!markdown) {
       return;
     }
-    const markdown = formatReportMarkdown(this.result);
     try {
       await navigator.clipboard.writeText(markdown);
-      new import_obsidian8.Notice("Vault Atlas: Markdown \u3092\u30AF\u30EA\u30C3\u30D7\u30DC\u30FC\u30C9\u306B\u30B3\u30D4\u30FC");
+      new import_obsidian15.Notice("Vault Atlas: \u30EC\u30DD\u30FC\u30C8\u3092\u30AF\u30EA\u30C3\u30D7\u30DC\u30FC\u30C9\u306B\u30B3\u30D4\u30FC");
     } catch (e) {
-      new import_obsidian8.Notice("Vault Atlas: \u30AF\u30EA\u30C3\u30D7\u30DC\u30FC\u30C9\u306B\u30B3\u30D4\u30FC\u3067\u304D\u307E\u305B\u3093\u3067\u3057\u305F");
+      new import_obsidian15.Notice("Vault Atlas: \u30AF\u30EA\u30C3\u30D7\u30DC\u30FC\u30C9\u306B\u30B3\u30D4\u30FC\u3067\u304D\u307E\u305B\u3093\u3067\u3057\u305F");
+    }
+  }
+  async saveMarkdownReport() {
+    const markdown = await this.getReportMarkdown();
+    if (!markdown || !this.result) {
+      return;
+    }
+    try {
+      const path = await exportReportToVault(
+        this.app,
+        markdown,
+        this.plugin.settings.vaultProfile.reportExportFolder,
+        this.result.generatedAt
+      );
+      new import_obsidian15.Notice(`Vault Atlas: \u30EC\u30DD\u30FC\u30C8\u3092\u4FDD\u5B58 \u2014 ${path}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "\u4FDD\u5B58\u306B\u5931\u6557\u3057\u307E\u3057\u305F";
+      new import_obsidian15.Notice(`Vault Atlas: ${message}`);
     }
   }
   onClose() {
@@ -1552,7 +2638,7 @@ var AtlasPanel = class extends import_obsidian8.Modal {
 };
 
 // src/main.ts
-var VaultAtlasPlugin = class extends import_obsidian9.Plugin {
+var VaultAtlasPlugin = class extends import_obsidian16.Plugin {
   constructor() {
     super(...arguments);
     this.settings = parseStorage(void 0);
@@ -1576,6 +2662,13 @@ var VaultAtlasPlugin = class extends import_obsidian9.Plugin {
         this.openAtlasPanel();
       }
     });
+    this.addCommand({
+      id: "run-deep-scan",
+      name: "Run Deep Scan",
+      callback: () => {
+        this.openAtlasPanel({ deepScan: true });
+      }
+    });
     this.addRibbonIcon("map", "Vault Atlas", () => {
       this.openAtlasPanel();
     });
@@ -1583,25 +2676,70 @@ var VaultAtlasPlugin = class extends import_obsidian9.Plugin {
       void this.maybeShowFundingModal();
     });
   }
-  openAtlasPanel() {
+  openAtlasPanel(options = {}) {
     if (this.atlasPanel) {
       this.atlasPanel.open();
+      if (options.deepScan) {
+        void this.atlasPanel.runDeepScan(true);
+      }
       return;
     }
-    this.atlasPanel = new AtlasPanel(this.app, this);
+    this.atlasPanel = new AtlasPanel(this.app, this, options);
     this.atlasPanel.open();
   }
   onAtlasPanelClosed() {
     this.atlasPanel = null;
   }
-  async scanVault() {
+  async scanVault(mode = "quick") {
+    const options = {
+      mode,
+      hubProtected: this.settings.hubProtected
+    };
     const result = await scanVault(
       this.app,
       this.settings.vaultProfile,
-      this.settings.hubDeferred
+      this.settings.hubDeferred,
+      options
     );
     this.lastScanResult = result;
     return result;
+  }
+  shouldOfferInitialDeepScan() {
+    return needsDeepScan(this.settings.vaultProfile);
+  }
+  async applyDeepScanReview(review) {
+    this.settings.hubProtected = mergeHubProtectedLists(
+      this.settings.hubProtected,
+      review.protectedFolderPaths
+    );
+    if (review.excludePrefixes.length > 0) {
+      const merged = [
+        .../* @__PURE__ */ new Set([
+          ...this.settings.vaultProfile.excludeFolderPrefixes,
+          ...review.excludePrefixes.map(
+            (prefix) => normalizeFolderPath(prefix)
+          )
+        ])
+      ].sort((a, b) => a.localeCompare(b, "ja"));
+      this.settings.vaultProfile = {
+        ...this.settings.vaultProfile,
+        excludeFolderPrefixes: merged,
+        confirmedAt: (/* @__PURE__ */ new Date()).toISOString()
+      };
+    } else {
+      this.settings.vaultProfile = {
+        ...this.settings.vaultProfile,
+        confirmedAt: (/* @__PURE__ */ new Date()).toISOString()
+      };
+    }
+    await this.saveSettings();
+  }
+  async getResolvedEntry() {
+    return resolveEntry(this.app, this.settings.vaultProfile);
+  }
+  async getEffectiveEntryPath() {
+    const resolved = await this.getResolvedEntry();
+    return effectiveEntryPathForScan(resolved);
   }
   async loadSettings() {
     const raw = await this.loadData();
@@ -1622,6 +2760,7 @@ var VaultAtlasPlugin = class extends import_obsidian9.Plugin {
       toStorage(
         this.settings.vaultProfile,
         this.settings.hubDeferred,
+        this.settings.hubProtected,
         this.lastSeenVersion
       )
     );

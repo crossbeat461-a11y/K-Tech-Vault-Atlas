@@ -70,6 +70,9 @@ export function buildAtlasPanelRows(result: VaultScanResult): AtlasPanelRow[] {
     if (hub.linkedFromParent) {
       flags.push("親からリンク済");
     }
+    if (hub.locked) {
+      flags.push(`ロック: ${hub.lockReasonLabel}`);
+    }
 
     byPath.set(hub.folderPath, {
       folderPath: hub.folderPath,
@@ -77,7 +80,7 @@ export function buildAtlasPanelRows(result: VaultScanResult): AtlasPanelRow[] {
       suggestedPath: hub.hubPath,
       status: "existing",
       wantHub: true,
-      locked: false,
+      locked: hub.locked,
       desc: flags.join(" / "),
       markdownCount: hub.markdownCount,
       parentHubPath: hub.parentHubPath,

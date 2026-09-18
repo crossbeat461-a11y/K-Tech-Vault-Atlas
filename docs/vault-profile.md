@@ -7,6 +7,7 @@ Vault Atlas が Vault ごとに保存する設定。插件 `data.json` の `vaul
 ```typescript
 interface VaultProfileV1 {
   version: 1;
+  entrySource: "manual" | "homepage";
   entryNotePath: string;
   hubTypeProperty: string;
   hubTypeValue: string;
@@ -26,6 +27,7 @@ interface VaultProfileV1 {
 ```json
 {
   "version": 1,
+  "entrySource": "manual",
   "entryNotePath": "Home.md",
   "hubTypeProperty": "type",
   "hubTypeValue": "hub",

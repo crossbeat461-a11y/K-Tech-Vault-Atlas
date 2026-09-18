@@ -1,5 +1,10 @@
 import { App, TFile, TFolder } from "obsidian";
 import {
+  effectiveEntryPathForScan,
+  resolveEntry,
+} from "../entry/entry-resolve";
+import { findEntryUnlinkedHubs } from "../entry/entry-links";
+import {
   shouldReconsiderDeferredHub,
   type HubDeferredEntry,
 } from "../hub-defer";
@@ -12,6 +17,9 @@ import {
   enrichRecommendReason,
 } from "./hub-network";
 import { isHubNote } from "./hub-detect";
+import { suggestExcludeFolders } from "./exclude-suggest";
+import { buildFolderGuide } from "./folder-guide";
+import { resolveHubLock } from "./hub-lock";
 import {
   recommendHubReason,
   resolveParentHubPath,
@@ -20,12 +28,19 @@ import {
 import type {
   DeferredHubWaiting,
   ExistingHubInfo,
+  HubReviewItem,
   LinkGapItem,
   RecommendedHub,
   ReconsideredHub,
   ScanFinding,
+  ScanMode,
   VaultScanResult,
 } from "./report";
+
+export interface ScanOptions {
+  mode?: ScanMode;
+  hubProtected?: string[];
+}
 
 function listMarkdownInFolder(folder: TFolder): TFile[] {
   return folder.children.filter(
@@ -104,9 +119,15 @@ function buildRecommendedHub(
 export async function scanVault(
   app: App,
   profile: VaultProfileV1,
-  hubDeferred: HubDeferredEntry[] = []
+  hubDeferred: HubDeferredEntry[] = [],
+  options: ScanOptions = {}
 ): Promise<VaultScanResult> {
+  const scanMode: ScanMode = options.mode ?? "quick";
+  const hubProtected = options.hubProtected ?? [];
+  const resolvedEntry = await resolveEntry(app, profile);
+  const entryPath = effectiveEntryPathForScan(resolvedEntry);
   const findings: ScanFinding[] = [];
+  const hubReviewItems: HubReviewItem[] = [];
   const recommendedHubs: RecommendedHub[] = [];
   const reconsideredHubs: ReconsideredHub[] = [];
   const deferredWaiting: DeferredHubWaiting[] = [];
@@ -139,20 +160,52 @@ export async function scanVault(
     }
   }
 
-  const entryFile = app.vault.getAbstractFileByPath(profile.entryNotePath);
+  const entryFile = resolvedEntry.effectivePath
+    ? app.vault.getAbstractFileByPath(resolvedEntry.effectivePath)
+    : null;
+  let entryContent = "";
   if (entryFile instanceof TFile) {
+    entryContent = await app.vault.read(entryFile);
     findings.push({
       severity: "info",
       code: "ENTRY_FOUND",
-      message: `入口ノート: ${profile.entryNotePath}`,
-      path: profile.entryNotePath,
+      message: `入口ノート: ${resolvedEntry.displayLabel}`,
+      path: entryPath,
     });
   } else {
     findings.push({
       severity: "gap",
       code: "ENTRY_MISSING",
-      message: `入口ノートが見つかりません: ${profile.entryNotePath}`,
-      path: profile.entryNotePath,
+      message: `入口ノートが見つかりません: ${entryPath}`,
+      path: entryPath,
+    });
+  }
+
+  if (
+    profile.entrySource === "homepage" &&
+    resolvedEntry.homepageAvailable &&
+    !resolvedEntry.homepagePath
+  ) {
+    findings.push({
+      severity: "warn",
+      code: "HOMEPAGE_ENTRY_UNRESOLVED",
+      message:
+        "Homepage 連携 ON ですが、起動ノートを解決できません。手動パスにフォールバックしています。",
+      path: entryPath,
+    });
+  }
+
+  const entryUnlinkedHubs =
+    entryFile instanceof TFile
+      ? findEntryUnlinkedHubs(hubPathsByFolder, entryContent, profile)
+      : [];
+
+  for (const item of entryUnlinkedHubs) {
+    findings.push({
+      severity: "warn",
+      code: "ENTRY_HUB_UNLINKED",
+      message: `入口から未リンク: ${item.folderPath}`,
+      path: item.hubPath,
     });
   }
 
@@ -164,11 +217,39 @@ export async function scanVault(
     if (isScanExcluded(folderPath, profile)) {
       continue;
     }
+
+    const hubContent = hubContentsByPath.get(hubPath) ?? "";
+    const lock = resolveHubLock({
+      folderPath,
+      hubPath,
+      hubContent,
+      entryPath,
+      hubProtected,
+      profile,
+    });
+
+    if (scanMode === "deep") {
+      hubReviewItems.push({
+        folderPath,
+        hubPath,
+        locked: lock.locked,
+        lockReason: lock.reason,
+        lockReasonLabel: lock.reasonLabel,
+        hubManaged: lock.hubManaged,
+        protectSuggested:
+          lock.locked ||
+          hubProtected.includes(folderPath) ||
+          lock.hubManaged !== profile.hubManagedAtlasValue,
+      });
+    }
+
     if (profile.skipRootWithoutHub && folderPath === "") {
       findings.push({
         severity: "warn",
         code: "ROOT_HUB_REDUNDANT",
-        message: `Vault ルートの HUB (${hubPath}) は入口 ${profile.entryNotePath} と重複しやすいです。不要ならトグル OFF で削除を検討`,
+        message: lock.locked
+          ? `Vault ルートの HUB (${hubPath}) は入口 ${entryPath} と重複しやすいです（ロック中）`
+          : `Vault ルートの HUB (${hubPath}) は入口 ${entryPath} と重複しやすいです。不要ならトグル OFF で削除を検討`,
         path: hubPath,
       });
       continue;
@@ -187,7 +268,7 @@ export async function scanVault(
     const parentHubPath = resolveParentHubPath(
       folderPath,
       hubPathsByFolder,
-      profile.entryNotePath
+      entryPath
     );
 
     existingHubs.push({
@@ -201,6 +282,10 @@ export async function scanVault(
         : false,
       parentHubPath,
       parentHubFile: network.parentHubFile,
+      locked: lock.locked,
+      lockReason: lock.reason,
+      lockReasonLabel: lock.reasonLabel,
+      hubManaged: lock.hubManaged,
     });
 
     if (network.parentHubFile && !network.parentLinksToChild) {
@@ -277,7 +362,7 @@ export async function scanVault(
     const parentHubPath = resolveParentHubPath(
       folderPath,
       hubPathsByFolder,
-      profile.entryNotePath
+      entryPath
     );
     const networkCtx = buildHubNetworkContext(
       folderPath,
@@ -354,15 +439,60 @@ export async function scanVault(
   });
   existingHubs.sort((a, b) => a.folderPath.localeCompare(b.folderPath, "ja"));
   linkGaps.sort((a, b) => a.folderPath.localeCompare(b.folderPath, "ja"));
+  hubReviewItems.sort((a, b) => a.folderPath.localeCompare(b.folderPath, "ja"));
+
+  const excludeSuggestions =
+    scanMode === "deep" ? suggestExcludeFolders(app, profile) : [];
+  const folderGuide = buildFolderGuide(folders, profile);
+
+  for (const item of folderGuide.emptyFolders) {
+    findings.push({
+      severity: "info",
+      code: "FOLDER_EMPTY",
+      message: `空フォルダ: ${item.folderPath}`,
+      path: item.folderPath,
+    });
+  }
+  for (const item of folderGuide.subfolderOnly) {
+    findings.push({
+      severity: "gap",
+      code: "FOLDER_SUBFOLDER_ONLY",
+      message: `整理候補: ${item.folderPath} — ${item.detail}`,
+      path: item.folderPath,
+    });
+  }
+  for (const group of folderGuide.namingDrift) {
+    findings.push({
+      severity: "warn",
+      code: "FOLDER_NAMING_DRIFT",
+      message: `命名ゆれ: ${group.parentPath} — ${group.folders.join(" / ")}（${group.reason}）`,
+      path: group.parentPath,
+      detail: group.folders.join(", "),
+    });
+  }
 
   return {
     generatedAt: new Date().toISOString(),
     vaultName: app.vault.getName(),
+    scanMode,
     foldersScanned: folders.length,
     hubCount,
     needsDecision: recommendedHubs.length + reconsideredHubs.length,
     optionalCount,
     skippedExcluded,
+    entryInfo: {
+      effectivePath: resolvedEntry.effectivePath,
+      source: resolvedEntry.source,
+      homepageAvailable: resolvedEntry.homepageAvailable,
+      homepagePath: resolvedEntry.homepagePath,
+      manualPath: resolvedEntry.manualPath,
+      exists: resolvedEntry.exists,
+      displayLabel: resolvedEntry.displayLabel,
+    },
+    entryUnlinkedHubs,
+    hubReviewItems,
+    excludeSuggestions,
+    folderGuide,
     recommendedHubs,
     reconsideredHubs,
     deferredWaiting,

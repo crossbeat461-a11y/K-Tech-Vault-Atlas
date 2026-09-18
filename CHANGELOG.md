@@ -2,6 +2,49 @@
 
 ## [Unreleased]
 
+## [0.9.0] — 2026-09-18
+
+### Added
+
+- **Folder Guide** — 空フォルダ、サブフォルダのみの整理候補、命名ゆれ（報告のみ）
+- **レポート保存** — Vault 内 Markdown ファイルへ出力（Settings → Scan で保存先）
+- 0.7: Homepage 連携、入口未リンク HUB、Home.md 作成
+- 0.8: 通常スキャン / Deep Scan、hub-managed ロック、hubProtected
+
+### Changed
+
+- 本番ビルドで `console` / `debugger` を除去（審査対応）
+
+## [0.8.0] — 2026-09-18
+
+### Added
+
+- **スキャン二刀流**: 通常スキャン（再スキャン）と **Deep Scan** を分離
+- Deep Scan: 既存 HUB の「触らない / Atlas で管理」、除外フォルダ候補の見直し
+- `hub-managed: external` で HUB 削除ロック、Atlas 作成 HUB は `hub-managed: atlas`
+- `hubProtected[]` を data.json に保存（Deep Scan の保護リスト）
+- 入口ノートは常時ロック
+- コマンド **Run Deep Scan**
+
+### Changed
+
+- 初回（`confirmedAt` 未設定）は Deep Scan を案内
+- ロック付き HUB はトグル OFF（削除）不可
+
+## [0.7.0] — 2026-09-18
+
+### Added
+
+- **Homepage 連携トグル**（Settings → Profile）。Homepage プラグインの起動ノートを入口として使う
+- 入口から未リンクのトップレベル HUB を検出（`entryUnlinkedHubs`）
+- パネル / 設定から **入口にリンクを追記**（`## いま開く` 等のセクションへ）
+- 手動モードで **Home.md を作成**（最小テンプレート）
+- Profile に `entrySource: "manual" | "homepage"` を追加
+
+### Changed
+
+- スキャン・HUB 作成・親解決は **有効な入口パス**（Homepage 連携時は Homepage のノート）を使用
+
 ## [0.6.0] — 2026-09-18
 
 ### Fixed

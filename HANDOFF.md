@@ -10,7 +10,7 @@
 | Name | K-Tech Vault Atlas |
 | Author | K-Tech Studio |
 | Repo | `crossbeat461-a11y/K-Tech-Vault-Atlas`（private） |
-| Version | **0.6.0** |
+| Version | **0.9.0** |
 
 ## Privacy
 
@@ -58,10 +58,10 @@ docs/diagnosis-rules.md  診断正本
 | Version | Scope | Status |
 | --- | --- | --- |
 | 0.6.0 | 足場・Profile マージ・誤検出修正 | **Done** |
-| 0.7.0 | Home 未リンク HUB | Next |
-| 0.8.0 | 初回 Profile 確認、Markdown 出力 | Waiting |
-| 0.9.0 | Folder Guide（報告のみ） | Waiting |
-| 1.0.0 | Release、掲載判断 | Waiting |
+| 0.7.0 | Home 未リンク HUB、Homepage 連携 | **Done** |
+| 0.8.0 | Deep Scan、HUB 保護、除外候補 | **Done** |
+| 0.9.0 | Folder Guide、Markdown 出力 | **Done** |
+| 1.0.0 | Release、掲載判断 | Next |
 
 Policy: `ROADMAP.md` が正本。
 
@@ -73,9 +73,17 @@ Policy: `ROADMAP.md` が正本。
 - [x] 操作パネル：再スキャン常時、トグル左配置
 - [x] トグル OFF → 削除（ゴミ箱）/ ON → 作成
 - [x] 古い `data.json` でも除外デフォルトがマージされる
-- [ ] Home 未リンク HUB（0.7.0）
+- [x] Home 未リンク HUB（0.7.0）
+- [x] Homepage 連携トグル（0.7.0）
 
-## Next（0.7.0）
+- [x] 通常スキャン / Deep Scan 二刀流（0.8.0）
+- [x] hub-managed ロック、hubProtected（0.8.0）
 
-- Home.md からリンクされていない HUB の検出
-- パネルから Home へ wikilink 追記
+- [x] Folder Guide（0.9.0）
+- [x] Markdown レポートのファイル出力（0.9.0）
+
+## Next（1.0.0）
+
+- GitHub Release 正本化、掲載判断
+- PV BOX 手動テスト完了
+- LISTING.md（公開する場合）

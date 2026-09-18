@@ -1,4 +1,40 @@
+import type { EntrySource } from "../profile";
+import type { HubLockReason } from "./hub-lock";
+
+export type ScanMode = "quick" | "deep";
 export type FindingSeverity = "info" | "warn" | "gap" | "action";
+
+export interface ExcludeSuggestion {
+  prefix: string;
+  reason: string;
+  markdownCount: number;
+}
+
+export interface HubReviewItem {
+  folderPath: string;
+  hubPath: string;
+  locked: boolean;
+  lockReason: HubLockReason | null;
+  lockReasonLabel: string;
+  hubManaged: string | null;
+  protectSuggested: boolean;
+}
+
+export interface EntryInfo {
+  effectivePath: string | null;
+  source: EntrySource;
+  homepageAvailable: boolean;
+  homepagePath: string | null;
+  manualPath: string;
+  exists: boolean;
+  displayLabel: string;
+}
+
+export interface EntryUnlinkedHub {
+  folderPath: string;
+  hubPath: string;
+  label: string;
+}
 
 export interface ScanFinding {
   severity: FindingSeverity;
@@ -51,6 +87,10 @@ export interface ExistingHubInfo {
   linkedFromParent: boolean;
   parentHubPath: string | null;
   parentHubFile: string | null;
+  locked: boolean;
+  lockReason: HubLockReason | null;
+  lockReasonLabel: string;
+  hubManaged: string | null;
 }
 
 export interface LinkGapItem {
@@ -60,14 +100,37 @@ export interface LinkGapItem {
   message: string;
 }
 
+export interface FolderGuideItem {
+  folderPath: string;
+  detail: string;
+}
+
+export interface NamingDriftGroup {
+  parentPath: string;
+  folders: string[];
+  reason: string;
+}
+
+export interface FolderGuideResult {
+  emptyFolders: FolderGuideItem[];
+  subfolderOnly: FolderGuideItem[];
+  namingDrift: NamingDriftGroup[];
+}
+
 export interface VaultScanResult {
   generatedAt: string;
   vaultName: string;
+  scanMode: ScanMode;
   foldersScanned: number;
   hubCount: number;
   needsDecision: number;
   optionalCount: number;
   skippedExcluded: number;
+  entryInfo: EntryInfo;
+  entryUnlinkedHubs: EntryUnlinkedHub[];
+  hubReviewItems: HubReviewItem[];
+  excludeSuggestions: ExcludeSuggestion[];
+  folderGuide: FolderGuideResult;
   recommendedHubs: RecommendedHub[];
   reconsideredHubs: ReconsideredHub[];
   deferredWaiting: DeferredHubWaiting[];
@@ -98,8 +161,42 @@ export function formatReportMarkdown(result: VaultScanResult): string {
     `- HUB 保留中: ${result.deferredWaiting.length}`,
     `- 任意（親 HUB で足りる等）: ${result.optionalCount}`,
     `- 除外スキップ: ${result.skippedExcluded}`,
+    `- 入口: ${result.entryInfo.displayLabel}${result.entryInfo.exists ? "" : "（未作成）"}`,
+    `- 入口未リンク HUB: ${result.entryUnlinkedHubs.length}`,
+    `- スキャン種別: ${result.scanMode === "deep" ? "Deep Scan" : "通常"}`,
     "",
   ];
+
+  if (result.excludeSuggestions.length > 0) {
+    lines.push("## 除外フォルダ候補", "");
+    for (const item of result.excludeSuggestions) {
+      lines.push(
+        `- \`${item.prefix}\` — ${item.reason}（md: ${item.markdownCount}）`
+      );
+    }
+    lines.push("");
+  }
+
+  if (result.hubReviewItems.length > 0) {
+    lines.push("## HUB 管理範囲", "");
+    for (const item of result.hubReviewItems) {
+      const lockNote = item.locked
+        ? `（ロック: ${item.lockReasonLabel}）`
+        : item.protectSuggested
+          ? "（保護推奨）"
+          : "（Atlas 管理可）";
+      lines.push(`- \`${item.folderPath}\` → \`${item.hubPath}\`${lockNote}`);
+    }
+    lines.push("");
+  }
+
+  if (result.entryUnlinkedHubs.length > 0) {
+    lines.push("## 入口未リンク HUB", "");
+    for (const hub of result.entryUnlinkedHubs) {
+      lines.push(`- ⚠️ \`${hub.folderPath}\` → \`${hub.hubPath}\``);
+    }
+    lines.push("");
+  }
 
   if (result.reconsideredHubs.length > 0) {
     lines.push("## HUB 再検討", "");
@@ -152,8 +249,44 @@ export function formatReportMarkdown(result: VaultScanResult): string {
     lines.push("");
   }
 
+  const guide = result.folderGuide;
+  if (
+    guide.emptyFolders.length > 0 ||
+    guide.subfolderOnly.length > 0 ||
+    guide.namingDrift.length > 0
+  ) {
+    lines.push("## Folder Guide", "");
+    if (guide.emptyFolders.length > 0) {
+      lines.push("### 空フォルダ", "");
+      for (const item of guide.emptyFolders) {
+        lines.push(`- \`${item.folderPath}\` — ${item.detail}`);
+      }
+      lines.push("");
+    }
+    if (guide.subfolderOnly.length > 0) {
+      lines.push("### 整理候補（サブフォルダのみ）", "");
+      for (const item of guide.subfolderOnly) {
+        lines.push(`- \`${item.folderPath}\` — ${item.detail}`);
+      }
+      lines.push("");
+    }
+    if (guide.namingDrift.length > 0) {
+      lines.push("### 命名ゆれ", "");
+      for (const group of guide.namingDrift) {
+        lines.push(
+          `- \`${group.parentPath}\`: ${group.folders.map((name) => `\`${name}\``).join(" / ")} — ${group.reason}`
+        );
+      }
+      lines.push("");
+    }
+  }
+
   const otherFindings = result.findings.filter(
-    (f) => f.code !== "HUB_RECOMMENDED"
+    (f) =>
+      f.code !== "HUB_RECOMMENDED" &&
+      f.code !== "FOLDER_EMPTY" &&
+      f.code !== "FOLDER_SUBFOLDER_ONLY" &&
+      f.code !== "FOLDER_NAMING_DRIFT"
   );
 
   if (otherFindings.length > 0) {
