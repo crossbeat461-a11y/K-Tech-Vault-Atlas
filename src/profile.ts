@@ -1,10 +1,15 @@
 export type HubNaming = "flexible" | "folder-match";
+export type EntrySource = "manual" | "homepage";
 
 export interface VaultProfileV1 {
   version: 1;
+  entrySource: EntrySource;
   entryNotePath: string;
   hubTypeProperty: string;
   hubTypeValue: string;
+  hubManagedProperty: string;
+  hubManagedExternalValue: string;
+  hubManagedAtlasValue: string;
   hubNaming: HubNaming;
   excludeFolderPrefixes: string[];
   excludePathSegments: string[];
@@ -12,14 +17,19 @@ export interface VaultProfileV1 {
   minMarkdownForHub: number;
   deferReconsiderDelta: number;
   skipRootWithoutHub: boolean;
+  reportExportFolder: string;
   confirmedAt: string;
 }
 
 export const DEFAULT_VAULT_PROFILE: VaultProfileV1 = {
   version: 1,
+  entrySource: "manual",
   entryNotePath: "Home.md",
   hubTypeProperty: "type",
   hubTypeValue: "hub",
+  hubManagedProperty: "hub-managed",
+  hubManagedExternalValue: "external",
+  hubManagedAtlasValue: "atlas",
   hubNaming: "flexible",
   excludeFolderPrefixes: [
     ".obsidian/",
@@ -32,6 +42,7 @@ export const DEFAULT_VAULT_PROFILE: VaultProfileV1 = {
   minMarkdownForHub: 3,
   deferReconsiderDelta: 2,
   skipRootWithoutHub: true,
+  reportExportFolder: "90 System/Vault Atlas/",
   confirmedAt: "",
 };
 
@@ -95,7 +106,35 @@ export function mergeVaultProfile(
       typeof stored.skipRootWithoutHub === "boolean"
         ? stored.skipRootWithoutHub
         : DEFAULT_VAULT_PROFILE.skipRootWithoutHub,
+    entrySource:
+      stored.entrySource === "homepage" || stored.entrySource === "manual"
+        ? stored.entrySource
+        : DEFAULT_VAULT_PROFILE.entrySource,
+    hubManagedProperty:
+      typeof stored.hubManagedProperty === "string" &&
+      stored.hubManagedProperty.trim()
+        ? stored.hubManagedProperty.trim()
+        : DEFAULT_VAULT_PROFILE.hubManagedProperty,
+    hubManagedExternalValue:
+      typeof stored.hubManagedExternalValue === "string" &&
+      stored.hubManagedExternalValue.trim()
+        ? stored.hubManagedExternalValue.trim()
+        : DEFAULT_VAULT_PROFILE.hubManagedExternalValue,
+    hubManagedAtlasValue:
+      typeof stored.hubManagedAtlasValue === "string" &&
+      stored.hubManagedAtlasValue.trim()
+        ? stored.hubManagedAtlasValue.trim()
+        : DEFAULT_VAULT_PROFILE.hubManagedAtlasValue,
+    reportExportFolder:
+      typeof stored.reportExportFolder === "string" &&
+      stored.reportExportFolder.trim()
+        ? normalizeFolderPath(stored.reportExportFolder.trim())
+        : DEFAULT_VAULT_PROFILE.reportExportFolder,
   };
+}
+
+export function needsDeepScan(profile: VaultProfileV1): boolean {
+  return profile.confirmedAt.trim().length === 0;
 }
 
 export function profileDiffersFromStored(

@@ -25,7 +25,8 @@ export async function createHubForFolder(
   app: App,
   folderPath: string,
   profile: VaultProfileV1,
-  parentHubPath: string | null
+  parentHubPath: string | null,
+  entryNotePath?: string
 ): Promise<string> {
   const hubPath = suggestHubPath(folderPath);
   const existing = app.vault.getAbstractFileByPath(hubPath);
@@ -43,7 +44,7 @@ export async function createHubForFolder(
     folderPath,
     hubPath,
     parentHubPath,
-    entryNotePath: profile.entryNotePath,
+    entryNotePath: entryNotePath ?? profile.entryNotePath,
     childNotePaths,
   });
 

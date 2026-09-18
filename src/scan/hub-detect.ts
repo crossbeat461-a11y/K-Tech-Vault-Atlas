@@ -30,3 +30,12 @@ export function isHubNote(content: string, profile: VaultProfileV1): boolean {
   const fm = parseFrontmatter(content);
   return fm[profile.hubTypeProperty] === profile.hubTypeValue;
 }
+
+export function getHubManagedValue(
+  content: string,
+  profile: VaultProfileV1
+): string | null {
+  const fm = parseFrontmatter(content);
+  const value = fm[profile.hubManagedProperty]?.trim();
+  return value && value.length > 0 ? value : null;
+}

@@ -4,11 +4,20 @@ import {
   removeDeferredEntry,
   upsertDeferredEntry,
 } from "./hub-defer";
-import { scanVault } from "./scan/vault-scan";
-import type { VaultScanResult } from "./scan/report";
+import {
+  effectiveEntryPathForScan,
+  resolveEntry,
+  type ResolvedEntry,
+} from "./entry/entry-resolve";
+import { mergeHubProtectedLists } from "./hub/hub-protect";
+import { scanVault, type ScanOptions } from "./scan/vault-scan";
+import type { ScanMode, VaultScanResult } from "./scan/report";
+import type { DeepScanReviewResult } from "./ui/deep-scan-modal";
 import { VaultAtlasSettingTab } from "./settings";
 import {
   mergeVaultProfile,
+  needsDeepScan,
+  normalizeFolderPath,
   profileDiffersFromStored,
 } from "./profile";
 import { parseStorage, toStorage, type PluginStorage } from "./storage";
@@ -41,6 +50,14 @@ export default class VaultAtlasPlugin extends Plugin {
       },
     });
 
+    this.addCommand({
+      id: "run-deep-scan",
+      name: "Run Deep Scan",
+      callback: () => {
+        this.openAtlasPanel({ deepScan: true });
+      },
+    });
+
     this.addRibbonIcon("map", "Vault Atlas", () => {
       this.openAtlasPanel();
     });
@@ -50,12 +67,15 @@ export default class VaultAtlasPlugin extends Plugin {
     });
   }
 
-  openAtlasPanel(): void {
+  openAtlasPanel(options: { deepScan?: boolean } = {}): void {
     if (this.atlasPanel) {
       this.atlasPanel.open();
+      if (options.deepScan) {
+        void this.atlasPanel.runDeepScan(true);
+      }
       return;
     }
-    this.atlasPanel = new AtlasPanel(this.app, this);
+    this.atlasPanel = new AtlasPanel(this.app, this, options);
     this.atlasPanel.open();
   }
 
@@ -63,14 +83,62 @@ export default class VaultAtlasPlugin extends Plugin {
     this.atlasPanel = null;
   }
 
-  async scanVault(): Promise<VaultScanResult> {
+  async scanVault(mode: ScanMode = "quick"): Promise<VaultScanResult> {
+    const options: ScanOptions = {
+      mode,
+      hubProtected: this.settings.hubProtected,
+    };
     const result = await scanVault(
       this.app,
       this.settings.vaultProfile,
-      this.settings.hubDeferred
+      this.settings.hubDeferred,
+      options
     );
     this.lastScanResult = result;
     return result;
+  }
+
+  shouldOfferInitialDeepScan(): boolean {
+    return needsDeepScan(this.settings.vaultProfile);
+  }
+
+  async applyDeepScanReview(review: DeepScanReviewResult): Promise<void> {
+    this.settings.hubProtected = mergeHubProtectedLists(
+      this.settings.hubProtected,
+      review.protectedFolderPaths
+    );
+
+    if (review.excludePrefixes.length > 0) {
+      const merged = [
+        ...new Set([
+          ...this.settings.vaultProfile.excludeFolderPrefixes,
+          ...review.excludePrefixes.map((prefix) =>
+            normalizeFolderPath(prefix)
+          ),
+        ]),
+      ].sort((a, b) => a.localeCompare(b, "ja"));
+      this.settings.vaultProfile = {
+        ...this.settings.vaultProfile,
+        excludeFolderPrefixes: merged,
+        confirmedAt: new Date().toISOString(),
+      };
+    } else {
+      this.settings.vaultProfile = {
+        ...this.settings.vaultProfile,
+        confirmedAt: new Date().toISOString(),
+      };
+    }
+
+    await this.saveSettings();
+  }
+
+  async getResolvedEntry(): Promise<ResolvedEntry> {
+    return resolveEntry(this.app, this.settings.vaultProfile);
+  }
+
+  async getEffectiveEntryPath(): Promise<string> {
+    const resolved = await this.getResolvedEntry();
+    return effectiveEntryPathForScan(resolved);
   }
 
   async loadSettings(): Promise<void> {
@@ -95,6 +163,7 @@ export default class VaultAtlasPlugin extends Plugin {
       toStorage(
         this.settings.vaultProfile,
         this.settings.hubDeferred,
+        this.settings.hubProtected,
         this.lastSeenVersion
       )
     );

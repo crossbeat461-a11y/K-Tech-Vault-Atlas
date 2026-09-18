@@ -1,5 +1,8 @@
-import { App, PluginSettingTab, Setting } from "obsidian";
+import { App, Notice, PluginSettingTab, Setting } from "obsidian";
 import { openBuyMeACoffee } from "./constants";
+import { createHomeEntryNote } from "./entry/entry-create";
+import { resolveEntry } from "./entry/entry-resolve";
+import { isHomepagePluginEnabled } from "./entry/homepage-integration";
 import type VaultAtlasPlugin from "./main";
 import type { VaultProfileV1 } from "./profile";
 
@@ -87,10 +90,68 @@ export class VaultAtlasSettingTab extends PluginSettingTab {
     });
 
     const profile = this.profile();
+    const homepageAvailable = isHomepagePluginEnabled(this.app);
+
+    new Setting(containerEl)
+      .setName("Homepage 連携")
+      .setDesc(
+        homepageAvailable
+          ? "ON にすると Homepage プラグインの起動ノートを入口として使います（kind: File）。"
+          : "Homepage プラグインが見つかりません。手動パスのみ使えます。"
+      )
+      .addToggle((toggle) => {
+        toggle.setValue(profile.entrySource === "homepage");
+        if (!homepageAvailable) {
+          toggle.setDisabled(true);
+        }
+        toggle.onChange(async (on) => {
+          await this.saveProfile({ entrySource: on ? "homepage" : "manual" });
+          this.display();
+        });
+      });
+
+    void resolveEntry(this.app, profile).then((resolved) => {
+      new Setting(containerEl)
+        .setName("有効な入口")
+        .setDesc(
+          resolved.exists
+            ? resolved.displayLabel
+            : `${resolved.displayLabel} — ファイル未作成`
+        )
+        .addText((text) => {
+          text
+            .setValue(resolved.effectivePath ?? resolved.manualPath)
+            .setDisabled(true);
+        });
+
+      if (!resolved.exists && profile.entrySource === "manual") {
+        new Setting(containerEl)
+          .setName("Home.md を作成")
+          .setDesc("入口ノートが無いとき、最小テンプレートから作成します。")
+          .addButton((button) =>
+            button.setButtonText("作成").onClick(() => {
+              void (async () => {
+                try {
+                  const path = await createHomeEntryNote(
+                    this.app,
+                    profile.entryNotePath || "Home.md"
+                  );
+                  new Notice(`Vault Atlas: ${path} を作成しました`);
+                  this.display();
+                } catch (error) {
+                  const message =
+                    error instanceof Error ? error.message : "作成失敗";
+                  new Notice(`Vault Atlas: ${message}`);
+                }
+              })();
+            })
+          );
+      }
+    });
 
     new Setting(containerEl)
       .setName("Entry note path")
-      .setDesc("入口ノート（例: Home.md）")
+      .setDesc("手動モード時、または Homepage で解決できないときのフォールバック")
       .addText((text) =>
         text
           .setPlaceholder("Home.md")
@@ -117,6 +178,11 @@ export class VaultAtlasSettingTab extends PluginSettingTab {
           await this.saveProfile({ hubTypeValue: value.trim() });
         })
       );
+
+    containerEl.createEl("p", {
+      cls: "setting-item-description",
+      text: "手書き・他プラグインの HUB は frontmatter に hub-managed: external を付けると Atlas から削除できません。Deep Scan でも触らない設定ができます。",
+    });
 
     new Setting(containerEl)
       .setName("Daily folder pattern")
@@ -183,6 +249,23 @@ export class VaultAtlasSettingTab extends PluginSettingTab {
               return;
             }
             await this.saveProfile({ deferReconsiderDelta: parsed });
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Report export folder")
+      .setDesc("レポート保存先（末尾 / 推奨）。無い場合は自動作成。")
+      .addText((text) =>
+        text
+          .setPlaceholder("90 System/Vault Atlas/")
+          .setValue(profile.reportExportFolder)
+          .onChange(async (value) => {
+            const trimmed = value.trim();
+            await this.saveProfile({
+              reportExportFolder: trimmed.endsWith("/")
+                ? trimmed
+                : `${trimmed}/`,
+            });
           })
       );
 

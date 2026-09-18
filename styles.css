@@ -131,6 +131,22 @@
   opacity: 1;
 }
 
+.vault-atlas-hub-row-locked .setting-item-name,
+.vault-atlas-hub-row-locked .setting-item-description {
+  color: var(--text-muted);
+}
+
+.vault-atlas-deep-scan-modal .modal-content {
+  max-width: 720px;
+  width: min(92vw, 720px);
+}
+
+.vault-atlas-deep-scan {
+  max-height: min(80vh, 720px);
+  overflow-y: auto;
+  padding: 0.5rem 0;
+}
+
 .vault-atlas-panel-body details {
   margin-top: 1em;
 }
