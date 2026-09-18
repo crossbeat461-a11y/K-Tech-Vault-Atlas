@@ -1,5 +1,6 @@
 import { App, TFile, TFolder } from "obsidian";
 import {
+  configDirExcludePrefix,
   isExcludedFolder,
   normalizeFolderPath,
   type VaultProfileV1,
@@ -71,12 +72,18 @@ export function suggestExcludeFolders(
     const folderPath = folder.path;
     const prefix = folderPath ? `${folderPath}/` : "";
 
-    if (folderPath.startsWith(".obsidian")) {
+    const configDirPrefix = configDirExcludePrefix(app.vault.configDir);
+    const configDirPath = configDirPrefix.slice(0, -1);
+
+    if (
+      folderPath === configDirPath ||
+      folderPath.startsWith(`${configDirPath}/`)
+    ) {
       const mdCount = countMarkdownRecursive(folder);
       if (mdCount > 0) {
         addSuggestion(
           suggestions,
-          ".obsidian/",
+          configDirPrefix,
           "プラグイン設定配下に Markdown あり",
           mdCount,
           profile

@@ -1,3 +1,5 @@
+import { collectStrings, isRecord, stringListHas } from "./type-guards";
+
 export type HubNaming = "flexible" | "folder-match";
 export type EntrySource = "manual" | "homepage";
 
@@ -32,7 +34,6 @@ export const DEFAULT_VAULT_PROFILE: VaultProfileV1 = {
   hubManagedAtlasValue: "atlas",
   hubNaming: "flexible",
   excludeFolderPrefixes: [
-    ".obsidian/",
     ".cursor/",
     "90 System/tools/",
     "00 Inbox/",
@@ -67,33 +68,93 @@ export function isExcludedFolder(
   );
 }
 
+function readTrimmedString(value: unknown, fallback: string): string {
+  return typeof value === "string" && value.trim() ? value.trim() : fallback;
+}
+
 function mergeStringLists(
   defaults: string[],
-  stored: string[] | undefined
+  stored: string[]
 ): string[] {
-  return [...new Set([...defaults, ...(stored ?? [])])].sort((a, b) =>
+  return [...new Set([...defaults, ...stored])].sort((a, b) =>
     a.localeCompare(b, "ja")
   );
 }
 
-export function mergeVaultProfile(
-  stored: Partial<VaultProfileV1> | undefined
+export function configDirExcludePrefix(configDir: string): string {
+  return normalizeFolderPath(configDir);
+}
+
+export function withConfigDirExclude(
+  profile: VaultProfileV1,
+  configDir: string
 ): VaultProfileV1 {
-  if (!stored || stored.version !== 1) {
-    return { ...DEFAULT_VAULT_PROFILE };
+  const prefix = configDirExcludePrefix(configDir);
+  if (stringListHas(profile.excludeFolderPrefixes, prefix)) {
+    return profile;
   }
   return {
+    ...profile,
+    excludeFolderPrefixes: mergeStringLists(profile.excludeFolderPrefixes, [
+      prefix,
+    ]),
+  };
+}
+
+export function mergeVaultProfile(stored: unknown): VaultProfileV1 {
+  if (!isRecord(stored) || stored.version !== 1) {
+    return { ...DEFAULT_VAULT_PROFILE };
+  }
+  const daily =
+    stored.dailyFolderPattern === null
+      ? null
+      : typeof stored.dailyFolderPattern === "string"
+        ? stored.dailyFolderPattern
+        : DEFAULT_VAULT_PROFILE.dailyFolderPattern;
+  return {
     ...DEFAULT_VAULT_PROFILE,
-    ...stored,
     version: 1,
+    entrySource:
+      stored.entrySource === "homepage" || stored.entrySource === "manual"
+        ? stored.entrySource
+        : DEFAULT_VAULT_PROFILE.entrySource,
+    entryNotePath: readTrimmedString(
+      stored.entryNotePath,
+      DEFAULT_VAULT_PROFILE.entryNotePath
+    ),
+    hubTypeProperty: readTrimmedString(
+      stored.hubTypeProperty,
+      DEFAULT_VAULT_PROFILE.hubTypeProperty
+    ),
+    hubTypeValue: readTrimmedString(
+      stored.hubTypeValue,
+      DEFAULT_VAULT_PROFILE.hubTypeValue
+    ),
+    hubManagedProperty: readTrimmedString(
+      stored.hubManagedProperty,
+      DEFAULT_VAULT_PROFILE.hubManagedProperty
+    ),
+    hubManagedExternalValue: readTrimmedString(
+      stored.hubManagedExternalValue,
+      DEFAULT_VAULT_PROFILE.hubManagedExternalValue
+    ),
+    hubManagedAtlasValue: readTrimmedString(
+      stored.hubManagedAtlasValue,
+      DEFAULT_VAULT_PROFILE.hubManagedAtlasValue
+    ),
+    hubNaming:
+      stored.hubNaming === "folder-match" || stored.hubNaming === "flexible"
+        ? stored.hubNaming
+        : DEFAULT_VAULT_PROFILE.hubNaming,
     excludeFolderPrefixes: mergeStringLists(
       DEFAULT_VAULT_PROFILE.excludeFolderPrefixes,
-      stored.excludeFolderPrefixes
+      collectStrings(stored.excludeFolderPrefixes)
     ),
     excludePathSegments: mergeStringLists(
       DEFAULT_VAULT_PROFILE.excludePathSegments,
-      stored.excludePathSegments
+      collectStrings(stored.excludePathSegments)
     ),
+    dailyFolderPattern: daily,
     minMarkdownForHub:
       typeof stored.minMarkdownForHub === "number"
         ? stored.minMarkdownForHub
@@ -106,30 +167,15 @@ export function mergeVaultProfile(
       typeof stored.skipRootWithoutHub === "boolean"
         ? stored.skipRootWithoutHub
         : DEFAULT_VAULT_PROFILE.skipRootWithoutHub,
-    entrySource:
-      stored.entrySource === "homepage" || stored.entrySource === "manual"
-        ? stored.entrySource
-        : DEFAULT_VAULT_PROFILE.entrySource,
-    hubManagedProperty:
-      typeof stored.hubManagedProperty === "string" &&
-      stored.hubManagedProperty.trim()
-        ? stored.hubManagedProperty.trim()
-        : DEFAULT_VAULT_PROFILE.hubManagedProperty,
-    hubManagedExternalValue:
-      typeof stored.hubManagedExternalValue === "string" &&
-      stored.hubManagedExternalValue.trim()
-        ? stored.hubManagedExternalValue.trim()
-        : DEFAULT_VAULT_PROFILE.hubManagedExternalValue,
-    hubManagedAtlasValue:
-      typeof stored.hubManagedAtlasValue === "string" &&
-      stored.hubManagedAtlasValue.trim()
-        ? stored.hubManagedAtlasValue.trim()
-        : DEFAULT_VAULT_PROFILE.hubManagedAtlasValue,
     reportExportFolder:
       typeof stored.reportExportFolder === "string" &&
       stored.reportExportFolder.trim()
         ? normalizeFolderPath(stored.reportExportFolder.trim())
         : DEFAULT_VAULT_PROFILE.reportExportFolder,
+    confirmedAt:
+      typeof stored.confirmedAt === "string"
+        ? stored.confirmedAt
+        : DEFAULT_VAULT_PROFILE.confirmedAt,
   };
 }
 
@@ -138,18 +184,18 @@ export function needsDeepScan(profile: VaultProfileV1): boolean {
 }
 
 export function profileDiffersFromStored(
-  stored: Partial<VaultProfileV1> | undefined,
+  stored: unknown,
   merged: VaultProfileV1
 ): boolean {
-  if (!stored || stored.version !== 1) {
+  if (!isRecord(stored) || stored.version !== 1) {
     return true;
   }
-  const storedPrefixes = [...(stored.excludeFolderPrefixes ?? [])].sort();
+  const storedPrefixes = [...collectStrings(stored.excludeFolderPrefixes)].sort();
   const mergedPrefixes = [...merged.excludeFolderPrefixes].sort();
   if (storedPrefixes.join("\n") !== mergedPrefixes.join("\n")) {
     return true;
   }
-  const storedSegments = [...(stored.excludePathSegments ?? [])].sort();
+  const storedSegments = [...collectStrings(stored.excludePathSegments)].sort();
   const mergedSegments = [...merged.excludePathSegments].sort();
   return storedSegments.join("\n") !== mergedSegments.join("\n");
 }

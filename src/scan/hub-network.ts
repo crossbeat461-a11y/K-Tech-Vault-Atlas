@@ -7,20 +7,31 @@ export function normalizeLinkTarget(target: string): string {
   return target.replace(/\.md$/i, "").replace(/\\/g, "/").trim();
 }
 
-export function extractWikilinkTargets(content: string): string[] {
-  const targets: string[] = [];
-  for (const match of content.matchAll(WIKILINK_RE)) {
-    targets.push(normalizeLinkTarget(match[1]));
+function collectRegexGroup1(content: string, pattern: RegExp): string[] {
+  const flags = pattern.global ? pattern.flags : `${pattern.flags}g`;
+  const re = new RegExp(pattern.source, flags);
+  const values: string[] = [];
+  let match: RegExpExecArray | null = re.exec(content);
+  while (match) {
+    const captured = match[1];
+    if (typeof captured === "string" && captured.length > 0) {
+      values.push(captured);
+    }
+    match = re.exec(content);
   }
-  return targets;
+  return values;
+}
+
+export function extractWikilinkTargets(content: string): string[] {
+  return collectRegexGroup1(content, WIKILINK_RE).map((target) =>
+    normalizeLinkTarget(target)
+  );
 }
 
 export function extractBacktickFolderNames(content: string): string[] {
-  const names: string[] = [];
-  for (const match of content.matchAll(BACKTICK_FOLDER_RE)) {
-    names.push(match[1].trim());
-  }
-  return names;
+  return collectRegexGroup1(content, BACKTICK_FOLDER_RE).map((name) =>
+    name.trim()
+  );
 }
 
 function linkMatchesChildFolder(
@@ -68,8 +79,8 @@ export function isChildListedInParentHub(
   }
 
   if (
-    parentContent.includes(`${childFolderPath}/`) ||
-    parentContent.includes(`/${leaf}/`)
+    parentContent.indexOf(`${childFolderPath}/`) !== -1 ||
+    parentContent.indexOf(`/${leaf}/`) !== -1
   ) {
     return true;
   }
@@ -131,7 +142,7 @@ export function buildHubNetworkContext(
 
   if (!nearest) {
     return {
-      parentFolderPath: folderPath.includes("/")
+      parentFolderPath: folderPath.indexOf("/") !== -1
         ? folderPath.split("/").slice(0, -1).join("/")
         : null,
       parentHubFolder: null,
@@ -166,7 +177,7 @@ export function countChildHubs(
       continue;
     }
     const rest = path.slice(prefix.length);
-    if (!rest.includes("/")) {
+    if (rest.indexOf("/") === -1) {
       count += 1;
     }
   }

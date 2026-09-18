@@ -1,15 +1,14 @@
+import { collectStrings, stringListHas } from "../type-guards";
+
 export function parseHubProtected(raw: unknown): string[] {
-  if (!Array.isArray(raw)) {
-    return [];
-  }
-  return raw.filter((item): item is string => typeof item === "string");
+  return collectStrings(raw);
 }
 
 export function isHubProtected(
   folderPath: string,
   hubProtected: string[]
 ): boolean {
-  return hubProtected.includes(folderPath);
+  return stringListHas(hubProtected, folderPath);
 }
 
 export function upsertHubProtected(
@@ -18,7 +17,7 @@ export function upsertHubProtected(
   protect: boolean
 ): string[] {
   if (protect) {
-    if (hubProtected.includes(folderPath)) {
+    if (stringListHas(hubProtected, folderPath)) {
       return hubProtected;
     }
     return [...hubProtected, folderPath].sort((a, b) =>
