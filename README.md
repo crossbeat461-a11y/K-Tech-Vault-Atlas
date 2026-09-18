@@ -1,45 +1,35 @@
 # K-Tech Vault Atlas
 
-既存 Vault のフォルダ構造と HUB（Map of Content）を診断し、操作パネルから段階的に整える Obsidian 拡張機能です。
+Scan folder and hub (MOC) structure in an existing vault, then fix gaps step by step from the Atlas panel.
 
-> 開発中（private）。**0.9.0** — 1.0.0 出荷準備前。
+**Version 1.0.0** — community release.
 
-## できること（0.9.0）
+## Features
 
-- **Atlas パネル** — スキャン結果と HUB 構成を一覧
-- **通常スキャン / Deep Scan** — 日常運用と Vault 全体の見直し
-- **HUB トグル** — 作成 / 削除（ゴミ箱）/ 保留 / 再検討
-- **Homepage 連携** — 起動ノートを入口として使う
-- **HUB 保護** — `hub-managed: external`、Deep Scan、入口ノート
-- **Folder Guide** — 空フォルダ・命名ゆれなど（報告のみ）
-- **レポート** — クリップボードコピー / Vault 内ファイル保存
+- **Quick scan** — hub recommendations, link gaps, defer / reconsider
+- **Deep Scan** — protect hand-written hubs, exclude-folder review
+- **Hub toggles** — create from template or move to trash (with confirm)
+- **Homepage integration** — optional entry note from Homepage plugin
+- **Folder Guide** — empty folders, subfolder-only, naming drift (report only)
+- **Report export** — save Markdown into your vault or copy to clipboard
+- **Offline** — vault-only scan; no network except optional Buy Me a Coffee link
 
-## やらないこと
-
-- リンク切れ修復（Vault Doctor 系）
-- フォルダの自動移動・一括上書き
-- ネットワーク送信（Buy Me a Coffee リンク除く）
-
-## 使い方
-
-1. リボン（地図アイコン）→ Atlas パネル
-2. **再スキャン** で最新状態を取得
-3. トグル ON/OFF で HUB を整える
-4. 構成見直しは **Deep Scan**
-5. レポート保存は **レポート保存** ボタン
-
-## 開発
+## Install (development)
 
 ```bash
-cd K-Tech-Vault-Atlas
 npm install
 npm run build
 ```
 
-`main.js`, `manifest.json`, `styles.css` を Vault の `.obsidian/plugins/k-tech-vault-atlas/` にコピー。
+Copy `main.js`, `manifest.json`, and `styles.css` to:
 
-正本: `ROADMAP.md` / `HANDOFF.md` / `docs/diagnosis-rules.md`
+`.obsidian/plugins/k-tech-vault-atlas/`
 
-## ライセンス
+## Docs
+
+- `ROADMAP.md` / `HANDOFF.md` / `docs/diagnosis-rules.md`
+- `LISTING.md` — community listing copy
+
+## License
 
 MIT — K-Tech Studio

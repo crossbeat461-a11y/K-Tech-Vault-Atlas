@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+## [1.0.0] — 2026-09-18
+
+### Added
+
+- **1.0 出荷** — GitHub Release workflow、LISTING.md、versions.json
+- Folder Guide、レポート保存、Deep Scan、Homepage 連携（0.7–0.9 機能を含む）
+
+### Changed
+
+- manifest 説明文を審査向けに更新（Obsidian 不含、250 文字以内）
+- 本番ビルドで console 除去
+
 ## [0.9.0] — 2026-09-18
 
 ### Added

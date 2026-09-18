@@ -10,7 +10,7 @@
 | Name | K-Tech Vault Atlas |
 | Author | K-Tech Studio |
 | Repo | `crossbeat461-a11y/K-Tech-Vault-Atlas`（private） |
-| Version | **0.9.0** |
+| Version | **1.0.0** |
 
 ## Privacy
 
@@ -61,7 +61,7 @@ docs/diagnosis-rules.md  診断正本
 | 0.7.0 | Home 未リンク HUB、Homepage 連携 | **Done** |
 | 0.8.0 | Deep Scan、HUB 保護、除外候補 | **Done** |
 | 0.9.0 | Folder Guide、Markdown 出力 | **Done** |
-| 1.0.0 | Release、掲載判断 | Next |
+| 1.0.0 | Release、掲載判断 | **Done** |
 
 Policy: `ROADMAP.md` が正本。
 
@@ -82,8 +82,8 @@ Policy: `ROADMAP.md` が正本。
 - [x] Folder Guide（0.9.0）
 - [x] Markdown レポートのファイル出力（0.9.0）
 
-## Next（1.0.0）
+## Ship（1.0.0）
 
-- GitHub Release 正本化、掲載判断
-- PV BOX 手動テスト完了
-- LISTING.md（公開する場合）
+- GitHub Release: tag `1.0.0` → Actions が asset 公開
+- community.obsidian.md: `LISTING.md` を Edit listing に貼る
+- pending 確定は Obsidian 本体で人が行う
