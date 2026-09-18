@@ -31,7 +31,7 @@ Vault Doctor / Vault Inspector が「メンテナンス全般」なら、Vault A
 
 - GitHub Release（tag = manifest.version、個別 asset）
 - LISTING.md（community 掲載文）
-- コミュニティ pending は人が確定
+- コミュニティ pending: **確定済み**（1.0.4）
 
 ## 0.9.0 で足したこと
 

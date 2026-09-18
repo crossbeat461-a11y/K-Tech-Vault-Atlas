@@ -89,4 +89,4 @@ Policy: `ROADMAP.md` が正本。
 - GitHub Release: 現行 tag は `1.0.4`（審査対応後。1.0.0 から上げた）
 - LP: https://k-tech-vault-atlas-lp.vercel.app/
 - community.obsidian.md: `LISTING.md` を Edit listing に貼る
-- pending 確定は Obsidian 本体で人が行う
+- pending 確定: **完了**（1.0.4）
