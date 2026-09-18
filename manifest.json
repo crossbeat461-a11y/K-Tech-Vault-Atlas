@@ -1,7 +1,7 @@
 {
   "id": "k-tech-vault-atlas",
   "name": "K-Tech Vault Atlas",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "minAppVersion": "1.8.7",
   "description": "Scan folder and hub (MOC) structure in your vault. Use the Atlas panel to find gaps, manage hub notes with toggles, fix links, run Deep Scan when your layout changes, and export reports. Works fully offline.",
   "author": "K-Tech Studio",

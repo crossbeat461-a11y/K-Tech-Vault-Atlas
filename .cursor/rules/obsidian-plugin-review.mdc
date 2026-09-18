@@ -34,6 +34,7 @@ alwaysApply: true
 ## リリース資産
 
 - リポジトリは **public**（private では attestation 不可）
-- tag push → CI で `npm ci` / `npm run build` 後に attestation → Release へ `main.js`, `manifest.json`, `styles.css`
-- **rerun しない**。失敗時は Release と tag を削除して tag を再 push
+- tag push → CI で `npm ci` / `npm run build` 後、**ファイルごとに** attestation → Release へ `main.js`, `manifest.json`, `styles.css`
+- `main.js` / `styles.css` のバイト列は版ごとに変える（バナーに版番号）。同じハッシュを再リリースしない。Obsidian は digest 単位で古い attestation も見る
+- **rerun しない**。失敗時は新しい版番号で tag を切る
 - `LISTING.md` は掲載時にエージェントが貼る（200 / 1000 文字制限）
