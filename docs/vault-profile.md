@@ -12,8 +12,12 @@ interface VaultProfileV1 {
   hubTypeValue: string;
   hubNaming: "flexible" | "folder-match";
   excludeFolderPrefixes: string[];
+  excludePathSegments: string[];
   dailyFolderPattern: string | null;
-  confirmedAt: string; // ISO8601 — ユーザーが推定を確認した日時
+  minMarkdownForHub: number;
+  deferReconsiderDelta: number;
+  skipRootWithoutHub: boolean;
+  confirmedAt: string;
 }
 ```
 
@@ -29,22 +33,31 @@ interface VaultProfileV1 {
   "excludeFolderPrefixes": [
     ".obsidian/",
     ".cursor/",
-    "node_modules/"
+    "90 System/tools/",
+    "00 Inbox/"
   ],
+  "excludePathSegments": ["node_modules", ".git"],
   "dailyFolderPattern": "00 Inbox/Daily/",
+  "minMarkdownForHub": 3,
+  "deferReconsiderDelta": 2,
+  "skipRootWithoutHub": true,
   "confirmedAt": ""
 }
 ```
 
-## 推定フロー（Phase 1）
+## マージ（0.6.0+）
+
+`excludeFolderPrefixes` と `excludePathSegments` は **デフォルトと保存値の和集合**。  
+古い `data.json` に `00 Inbox/` がなくても、起動時にデフォルトが足される。
+
+## 推定フロー（0.8.0 予定）
 
 1. `Home.md` があれば `entryNotePath` 候補
-2. `type: hub` を持つファイルを全検索 → `hubNaming: flexible` を提案
-3. 除外フォルダは上記デフォルトを提案
-4. 設定タブまたは初回スキャン後モーダルで確認
-5. `confirmedAt` を更新して保存
+2. `type: hub` を持つファイルを検索 → `hubNaming: flexible` を提案
+3. 設定タブまたは初回スキャン後モーダルで確認
+4. `confirmedAt` を更新して保存
 
 ## 将来（v2）
 
-- 連載フォルダは親 HUB のみで十分、等の **フォルダ別ポリシー**
+- フォルダ別ポリシー（連載は親 HUB のみ、等）
 - Home 反映方式: `manual` | `dataview` | `both`

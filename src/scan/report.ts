@@ -1,4 +1,4 @@
-export type FindingSeverity = "info" | "warn" | "gap";
+export type FindingSeverity = "info" | "warn" | "gap" | "action";
 
 export interface ScanFinding {
   severity: FindingSeverity;
@@ -8,12 +8,71 @@ export interface ScanFinding {
   detail?: string;
 }
 
+export interface HubNetworkStatus {
+  parentHubFile: string | null;
+  parentHubFolder: string | null;
+  listedInParentHub: boolean;
+  parentLinksToChild: boolean;
+  childHubCount: number;
+}
+
+export interface RecommendedHub {
+  folderPath: string;
+  suggestedPath: string;
+  markdownCount: number;
+  subfolderCount: number;
+  parentHubPath: string | null;
+  reason: string;
+  network: HubNetworkStatus;
+}
+
+export interface ReconsideredHub extends RecommendedHub {
+  mdCountAtDefer: number;
+  reconsiderReason: string;
+}
+
+export interface DeferredHubWaiting {
+  folderPath: string;
+  mdCountAtDefer: number;
+  currentMdCount: number;
+  deferredAt: string;
+  suggestedPath: string;
+  parentHubPath: string | null;
+  parentHubFile: string | null;
+  parentLinksToChild: boolean;
+}
+
+export interface ExistingHubInfo {
+  folderPath: string;
+  hubPath: string;
+  markdownCount: number;
+  childHubCount: number;
+  listedInParentHub: boolean;
+  linkedFromParent: boolean;
+  parentHubPath: string | null;
+  parentHubFile: string | null;
+}
+
+export interface LinkGapItem {
+  folderPath: string;
+  hubPath: string;
+  parentHubPath: string;
+  message: string;
+}
+
 export interface VaultScanResult {
   generatedAt: string;
   vaultName: string;
   foldersScanned: number;
   hubCount: number;
   needsDecision: number;
+  optionalCount: number;
+  skippedExcluded: number;
+  recommendedHubs: RecommendedHub[];
+  reconsideredHubs: ReconsideredHub[];
+  deferredWaiting: DeferredHubWaiting[];
+  existingHubs: ExistingHubInfo[];
+  linkGaps: LinkGapItem[];
   findings: ScanFinding[];
 }
 
@@ -21,6 +80,7 @@ const SEVERITY_ICON: Record<FindingSeverity, string> = {
   info: "✅",
   warn: "⚠️",
   gap: "❓",
+  action: "➕",
 };
 
 export function formatReportMarkdown(result: VaultScanResult): string {
@@ -33,24 +93,84 @@ export function formatReportMarkdown(result: VaultScanResult): string {
     "## Summary",
     `- Folders scanned: ${result.foldersScanned}`,
     `- Hubs found: ${result.hubCount}`,
-    `- Needs decision: ${result.needsDecision}`,
-    "",
-    "## Findings",
+    `- HUB 推奨（作成候補）: ${result.needsDecision}`,
+    `- HUB 再検討（保留から）: ${result.reconsideredHubs.length}`,
+    `- HUB 保留中: ${result.deferredWaiting.length}`,
+    `- 任意（親 HUB で足りる等）: ${result.optionalCount}`,
+    `- 除外スキップ: ${result.skippedExcluded}`,
     "",
   ];
 
-  for (const finding of result.findings) {
-    const icon = SEVERITY_ICON[finding.severity];
-    lines.push(`${icon} ${finding.message}`);
-    if (finding.detail) {
-      lines.push(`   ${finding.detail}`);
+  if (result.reconsideredHubs.length > 0) {
+    lines.push("## HUB 再検討", "");
+    for (const hub of result.reconsideredHubs) {
+      lines.push(
+        `- 🔄 \`${hub.folderPath}\` → \`${hub.suggestedPath}\`（${hub.reconsiderReason}）`
+      );
     }
+    lines.push("");
   }
 
-  if (result.findings.length === 0) {
-    lines.push("_No findings._");
+  if (result.deferredWaiting.length > 0) {
+    lines.push("## HUB 保留中", "");
+    for (const item of result.deferredWaiting) {
+      lines.push(
+        `- 💤 \`${item.folderPath}\`（保留時 ${item.mdCountAtDefer} 件 → 現在 ${item.currentMdCount} 件）`
+      );
+    }
+    lines.push("");
   }
 
-  lines.push("");
+  if (result.recommendedHubs.length > 0) {
+    lines.push("## HUB 推奨", "");
+    for (const hub of result.recommendedHubs) {
+      const net = hub.network;
+      const parentNote =
+        net.parentHubFile !== null
+          ? ` / 親: ${net.parentHubFile}${net.listedInParentHub ? "（記載あり）" : ""}`
+          : "";
+      lines.push(
+        `- ➕ \`${hub.folderPath}\` → \`${hub.suggestedPath}\`（${hub.reason}${parentNote}）`
+      );
+    }
+    lines.push("");
+  }
+
+  if (result.existingHubs.length > 0) {
+    lines.push(`## 既存 HUB（${result.existingHubs.length}）`, "");
+    for (const hub of result.existingHubs) {
+      lines.push(`- ✅ \`${hub.folderPath}\` → \`${hub.hubPath}\`（子 HUB: ${hub.childHubCount}）`);
+    }
+    lines.push("");
+  }
+
+  if (result.linkGaps.length > 0) {
+    lines.push("## リンク不足", "");
+    for (const gap of result.linkGaps) {
+      lines.push(`- ⚠️ \`${gap.folderPath}\`: ${gap.message}`);
+    }
+    lines.push("");
+  }
+
+  const otherFindings = result.findings.filter(
+    (f) => f.code !== "HUB_RECOMMENDED"
+  );
+
+  if (otherFindings.length > 0) {
+    lines.push("## その他", "");
+    for (const finding of otherFindings) {
+      const icon = SEVERITY_ICON[finding.severity];
+      lines.push(`${icon} ${finding.message}`);
+      if (finding.detail) {
+        lines.push(`   ${finding.detail}`);
+      }
+    }
+    lines.push("");
+  }
+
+  if (result.recommendedHubs.length === 0 && otherFindings.length === 0) {
+    lines.push("_No findings._", "");
+  }
+
   return lines.join("\n");
 }
