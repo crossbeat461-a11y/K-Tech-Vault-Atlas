@@ -5,5 +5,5 @@ export async function deleteHubFile(app: App, hubPath: string): Promise<void> {
   if (!(file instanceof TFile)) {
     throw new Error(`HUB が見つかりません: ${hubPath}`);
   }
-  await app.vault.trash(file);
+  await app.fileManager.trashFile(file);
 }

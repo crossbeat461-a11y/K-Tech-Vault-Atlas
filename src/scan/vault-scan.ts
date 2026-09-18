@@ -10,7 +10,8 @@ import {
 } from "../hub-defer";
 import { suggestHubPath } from "../hub/hub-template";
 import { folderPrefix, isScanExcluded } from "../path-utils";
-import { isExcludedFolder, type VaultProfileV1 } from "../profile";
+import { isExcludedFolder, withConfigDirExclude, type VaultProfileV1 } from "../profile";
+import { stringListHas } from "../type-guards";
 import {
   buildHubNetworkContext,
   countChildHubs,
@@ -19,7 +20,7 @@ import {
 import { isHubNote } from "./hub-detect";
 import { suggestExcludeFolders } from "./exclude-suggest";
 import { buildFolderGuide } from "./folder-guide";
-import { resolveHubLock } from "./hub-lock";
+import { resolveHubLock, type HubLockStatus } from "./hub-lock";
 import {
   recommendHubReason,
   resolveParentHubPath,
@@ -40,6 +41,21 @@ import type {
 export interface ScanOptions {
   mode?: ScanMode;
   hubProtected?: string[];
+}
+
+function shouldSuggestProtect(
+  lock: HubLockStatus,
+  folderPath: string,
+  hubProtected: string[],
+  profile: VaultProfileV1
+): boolean {
+  if (lock.locked) {
+    return true;
+  }
+  if (stringListHas(hubProtected, folderPath)) {
+    return true;
+  }
+  return lock.hubManaged !== profile.hubManagedAtlasValue;
 }
 
 function listMarkdownInFolder(folder: TFolder): TFile[] {
@@ -122,6 +138,7 @@ export async function scanVault(
   hubDeferred: HubDeferredEntry[] = [],
   options: ScanOptions = {}
 ): Promise<VaultScanResult> {
+  profile = withConfigDirExclude(profile, app.vault.configDir);
   const scanMode: ScanMode = options.mode ?? "quick";
   const hubProtected = options.hubProtected ?? [];
   const resolvedEntry = await resolveEntry(app, profile);
@@ -236,10 +253,7 @@ export async function scanVault(
         lockReason: lock.reason,
         lockReasonLabel: lock.reasonLabel,
         hubManaged: lock.hubManaged,
-        protectSuggested:
-          lock.locked ||
-          hubProtected.includes(folderPath) ||
-          lock.hubManaged !== profile.hubManagedAtlasValue,
+        protectSuggested: shouldSuggestProtect(lock, folderPath, hubProtected, profile),
       });
     }
 

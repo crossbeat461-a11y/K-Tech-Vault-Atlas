@@ -27,9 +27,12 @@ alwaysApply: true
 
 ## 設定 UI
 
-- 設定は **タブ**（Profile / Support）
+- 設定は **タブ**（Profile / Scan / Support）
+- `getSettingDefinitions()` を実装する（1.13 の設定検索）。`display()` は 1.8.7 向けフォールバック
 - Support タブに Buy Me a Coffee ボタン
 - 初回インストール・版更新時は `FundingModal`（`lastSeenVersion` で1回）
+- `loadData()` は `unknown` に落とす。`JSON.parse` / `Array.isArray` も unknown 経由
+- 削除は `FileManager.trashFile()`。設定フォルダは `Vault#configDir`（`.obsidian` を直書きしない）
 
 ## リリース資産
 

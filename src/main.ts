@@ -142,7 +142,7 @@ export default class VaultAtlasPlugin extends Plugin {
   }
 
   async loadSettings(): Promise<void> {
-    const raw = await this.loadData();
+    const raw: unknown = (await this.loadData()) as unknown;
     const storage = parseStorage(raw);
     const mergedProfile = mergeVaultProfile(storage.vaultProfile);
     const rawProfile = storage.vaultProfile;

@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [1.0.3] — 2026-09-18
+
+### Fixed
+
+- コミュニティ審査の Warning を解消（any 回避、trashFile、configDir、設定検索 API）
+
 ## [1.0.2] — 2026-09-18
 
 ### Fixed

@@ -14,7 +14,9 @@ export function pathHasExcludedSegment(
   segments: string[]
 ): boolean {
   const parts = folderPath.split("/").filter(Boolean);
-  return parts.some((part) => segments.includes(part));
+  return parts.some((part) =>
+    segments.some((segment) => segment === part)
+  );
 }
 
 export function isScanExcluded(
