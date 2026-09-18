@@ -1,0 +1,36 @@
+---
+description: K-Tech Vault Atlas — コミュニティ審査 Warning 回避
+globs:
+  - "**/*"
+alwaysApply: true
+---
+
+# Obsidian コミュニティ審査 — Vault Atlas
+
+公開前に必ず確認する。
+
+## manifest.json
+
+- `description` に **Obsidian** を入れない
+- `name` に **Plugin** を入れない（K-Tech Vault Atlas でよい）
+- `authorUrl` は GitHub **プロファイル** URL（リポジトリ URL 不可）
+- `fundingUrl` を設定（Buy Me a Coffee）
+- `isDesktopOnly` は実態に合わせる（モバイルでもスキャン可なら false）
+
+## コード
+
+- **ネットワークリクエスト禁止**（スキャンは Vault 内のみ）
+- 本番で `console.log` / `console.error` を出さない（ユーザー向けは `Notice`）
+- 破壊的操作は Phase 2 以降。Phase 1 は読み取りのみ
+- `loadData` / `saveData` は `storage.ts` 経由。旧形式も `parseStorage` で吸収
+
+## 設定 UI
+
+- 設定は **タブ**（Profile / Support）
+- Support タブに Buy Me a Coffee ボタン
+- 初回インストール・版更新時は `FundingModal`（`lastSeenVersion` で1回）
+
+## リリース資産
+
+- tag push → `main.js`, `manifest.json`, `styles.css`
+- `LISTING.md` は掲載時にエージェントが貼る（200 / 1000 文字制限）

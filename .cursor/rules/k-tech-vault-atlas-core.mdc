@@ -1,0 +1,29 @@
+---
+description: K-Tech Vault Atlas 開発ルール
+globs:
+  - "**/*"
+alwaysApply: true
+---
+
+# K-Tech Vault Atlas
+
+正本: このリポジトリ。Mac / Windows は GitHub private で同期。
+
+## 方針
+
+- **Non-destructive first** — Phase 1 は読み取りとレポートのみ
+- 診断ルールの正本: `docs/diagnosis-rules.md`
+- Phase 表の正本: `ROADMAP.md`（`HANDOFF.md` と同期）
+- Vault Doctor / Inspector とは境界を守る（リンク修復はやらない）
+
+## 実装
+
+- TypeScript + esbuild（他 K-Tech Obsidian プラグインと同型）
+- 秘密情報・Vault 実パスを README に書かない
+- `data.json` の Vault Profile スキーマは `docs/vault-profile.md`
+
+## 出荷前
+
+- private のまま開発。公開判断は Phase 5
+- 審査 Warning 回避: `obsidian-plugin-review.mdc`
+- コミュニティ掲載時は `LISTING.md` を別途追加

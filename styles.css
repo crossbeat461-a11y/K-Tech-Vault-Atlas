@@ -1,0 +1,54 @@
+/* K-Tech Vault Atlas */
+
+.vault-atlas-settings-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35em;
+  margin: 0.5em 0 1em;
+}
+
+.vault-atlas-settings-tab {
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 999px;
+  padding: 0.28em 0.85em;
+  cursor: pointer;
+  font-size: var(--font-ui-small);
+  background: var(--background-secondary);
+  color: var(--text-normal);
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.vault-atlas-settings-tab:hover {
+  border-color: var(--interactive-accent-hover);
+}
+
+.vault-atlas-settings-tab.is-active {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border-color: var(--interactive-accent);
+  font-weight: var(--font-weight-semibold);
+}
+
+.vault-atlas-settings-panel {
+  margin-top: 0.25em;
+}
+
+.vault-atlas-report {
+  padding: 0.75rem 1rem;
+  font-size: var(--font-ui-small);
+  line-height: 1.5;
+}
+
+.vault-atlas-report h2 {
+  margin-top: 1rem;
+  margin-bottom: 0.5rem;
+  font-size: var(--font-ui-medium);
+}
+
+.vault-atlas-report pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
