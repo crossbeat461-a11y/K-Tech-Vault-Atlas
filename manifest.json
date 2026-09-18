@@ -1,7 +1,7 @@
 {
   "id": "k-tech-vault-atlas",
   "name": "K-Tech Vault Atlas",
-  "version": "0.0.0",
+  "version": "0.6.0",
   "minAppVersion": "1.8.7",
   "description": "Scan your vault for folder and hub (MOC) structure, then report what needs attention before you reorganize.",
   "author": "K-Tech Studio",

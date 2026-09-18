@@ -36,19 +36,119 @@
   margin-top: 0.25em;
 }
 
-.vault-atlas-report {
-  padding: 0.75rem 1rem;
-  font-size: var(--font-ui-small);
-  line-height: 1.5;
+.vault-atlas-panel-modal .modal-content {
+  max-width: 720px;
+  width: min(92vw, 720px);
 }
 
-.vault-atlas-report h2 {
+.vault-atlas-panel {
+  display: flex;
+  flex-direction: column;
+  max-height: min(80vh, 720px);
+  padding: 0;
+  width: 100%;
+}
+
+.vault-atlas-panel-header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--background-primary);
+  border-bottom: 1px solid var(--background-modifier-border);
+  padding: 0.75rem 1rem 0.65rem;
+  flex-shrink: 0;
+}
+
+.vault-atlas-panel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.65rem;
+}
+
+.vault-atlas-panel-actions button {
+  cursor: pointer;
+}
+
+.vault-atlas-panel-body {
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0.75rem 1rem 1rem;
+  font-size: var(--font-ui-small);
+  line-height: 1.5;
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.vault-atlas-panel-body h3 {
   margin-top: 1rem;
   margin-bottom: 0.5rem;
   font-size: var(--font-ui-medium);
 }
 
+/* Setting 行: トグルを左、テキストを右 */
+.vault-atlas-panel-body .setting-item {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 0.75rem;
+  width: 100%;
+  box-sizing: border-box;
+  border-top: 1px solid var(--background-modifier-border);
+  padding: 0.65em 0;
+}
+
+.vault-atlas-panel-body .setting-item-control {
+  order: -1;
+  flex: 0 0 auto;
+  padding-top: 0.15em;
+  margin-right: 0;
+}
+
+.vault-atlas-panel-body .setting-item-info {
+  order: 0;
+  flex: 1 1 auto;
+  min-width: 0;
+  margin-right: 0;
+}
+
+.vault-atlas-hub-row.setting-item {
+  border-top: none;
+}
+
+.vault-atlas-hub-row .setting-item-name {
+  word-break: break-word;
+}
+
+.vault-atlas-hub-row .setting-item-description {
+  word-break: break-word;
+}
+
+.vault-atlas-hub-row-existing .setting-item-control {
+  opacity: 1;
+}
+
+.vault-atlas-panel-body details {
+  margin-top: 1em;
+}
+
+.vault-atlas-panel-body summary {
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+  margin-bottom: 0.35em;
+}
+
 .vault-atlas-report pre {
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.vault-atlas-confirm-message {
+  white-space: pre-wrap;
+  line-height: 1.5;
+  margin: 0.75em 0 1em;
 }

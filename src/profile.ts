@@ -7,7 +7,11 @@ export interface VaultProfileV1 {
   hubTypeValue: string;
   hubNaming: HubNaming;
   excludeFolderPrefixes: string[];
+  excludePathSegments: string[];
   dailyFolderPattern: string | null;
+  minMarkdownForHub: number;
+  deferReconsiderDelta: number;
+  skipRootWithoutHub: boolean;
   confirmedAt: string;
 }
 
@@ -17,8 +21,17 @@ export const DEFAULT_VAULT_PROFILE: VaultProfileV1 = {
   hubTypeProperty: "type",
   hubTypeValue: "hub",
   hubNaming: "flexible",
-  excludeFolderPrefixes: [".obsidian/", ".cursor/", "node_modules/"],
+  excludeFolderPrefixes: [
+    ".obsidian/",
+    ".cursor/",
+    "90 System/tools/",
+    "00 Inbox/",
+  ],
+  excludePathSegments: ["node_modules", ".git"],
   dailyFolderPattern: "00 Inbox/Daily/",
+  minMarkdownForHub: 3,
+  deferReconsiderDelta: 2,
+  skipRootWithoutHub: true,
   confirmedAt: "",
 };
 
@@ -43,6 +56,15 @@ export function isExcludedFolder(
   );
 }
 
+function mergeStringLists(
+  defaults: string[],
+  stored: string[] | undefined
+): string[] {
+  return [...new Set([...defaults, ...(stored ?? [])])].sort((a, b) =>
+    a.localeCompare(b, "ja")
+  );
+}
+
 export function mergeVaultProfile(
   stored: Partial<VaultProfileV1> | undefined
 ): VaultProfileV1 {
@@ -53,7 +75,42 @@ export function mergeVaultProfile(
     ...DEFAULT_VAULT_PROFILE,
     ...stored,
     version: 1,
-    excludeFolderPrefixes:
-      stored.excludeFolderPrefixes ?? DEFAULT_VAULT_PROFILE.excludeFolderPrefixes,
+    excludeFolderPrefixes: mergeStringLists(
+      DEFAULT_VAULT_PROFILE.excludeFolderPrefixes,
+      stored.excludeFolderPrefixes
+    ),
+    excludePathSegments: mergeStringLists(
+      DEFAULT_VAULT_PROFILE.excludePathSegments,
+      stored.excludePathSegments
+    ),
+    minMarkdownForHub:
+      typeof stored.minMarkdownForHub === "number"
+        ? stored.minMarkdownForHub
+        : DEFAULT_VAULT_PROFILE.minMarkdownForHub,
+    deferReconsiderDelta:
+      typeof stored.deferReconsiderDelta === "number"
+        ? stored.deferReconsiderDelta
+        : DEFAULT_VAULT_PROFILE.deferReconsiderDelta,
+    skipRootWithoutHub:
+      typeof stored.skipRootWithoutHub === "boolean"
+        ? stored.skipRootWithoutHub
+        : DEFAULT_VAULT_PROFILE.skipRootWithoutHub,
   };
+}
+
+export function profileDiffersFromStored(
+  stored: Partial<VaultProfileV1> | undefined,
+  merged: VaultProfileV1
+): boolean {
+  if (!stored || stored.version !== 1) {
+    return true;
+  }
+  const storedPrefixes = [...(stored.excludeFolderPrefixes ?? [])].sort();
+  const mergedPrefixes = [...merged.excludeFolderPrefixes].sort();
+  if (storedPrefixes.join("\n") !== mergedPrefixes.join("\n")) {
+    return true;
+  }
+  const storedSegments = [...(stored.excludePathSegments ?? [])].sort();
+  const mergedSegments = [...merged.excludePathSegments].sort();
+  return storedSegments.join("\n") !== mergedSegments.join("\n");
 }

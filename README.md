@@ -1,44 +1,43 @@
 # K-Tech Vault Atlas
 
-Obsidian プラグイン。**既存 Vault** のフォルダ構造と HUB（Map of Content）を診断し、整理の提案と段階的な導入を支援する。
+Obsidian プラグイン。**既存 Vault** のフォルダ構造と HUB（Map of Content）を診断し、操作パネルから段階的に整える。
 
-> 開発中（private）。コミュニティ公開前。
+> 開発中（private）。0.6.0 — 1.0 向けに機能追加中。
 
-## このプラグインがやること
+## できること（0.6.0）
 
-- Vault をスキャンし、フォルダ・HUB・入口ノートの状態をレポートする
-- その Vault 固有のルール（命名、frontmatter、除外フォルダ）を **Vault Profile** として保存する
-- HUB 不足・Home 未リンク・孤立フォルダなどを **判断待ち** として提示する（一括上書きしない）
+- **Atlas パネル**（リボン）— スキャン結果と HUB 構成を一覧
+- **再スキャン** — ヘッダーに常時表示
+- **トグル** — ON = HUB 作成 / OFF = ゴミ箱へ削除 + 保留
+- **親 HUB 認識** — 表・ウィキリンク解析、リンク不足の検出
+- **保留 / 再検討** — 不要なフォルダは保留。ノート増で再提案
+- **Vault Profile** — 入口ノート、除外フォルダ、HUB 判定 frontmatter
 
-## このプラグインがやらないこと（Phase 1）
+## やらないこと
 
-- Vault 全体の自動書き換え
-- 壊れたリンクの修復（Vault Doctor / Vault Inspector 系の仕事）
-- フォルダの強制移動
+- リンク切れ修復（Vault Doctor 系）
+- Vault 全体の自動移動・一括上書き
+- ネットワーク送信
 
-## モジュール構成（予定）
+## 使い方
 
-| モジュール | 役割 | Phase |
-| --- | --- | --- |
-| **Vault Atlas（Core）** | 診断・レポート・Vault Profile | 1 |
-| **Hub Keeper** | HUB 作成・リンク更新 | 2 |
-| **Folder Guide** | フォルダ整理の提案 | 3 |
+1. リボン（地図アイコン）→ Atlas パネル
+2. **再スキャン** で最新状態を取得
+3. トグル ON/OFF で HUB を整える
+4. 納得いくまで 2–3 を繰り返す
 
-正本: `ROADMAP.md` / `ARCHITECTURE.md` / `docs/diagnosis-rules.md`
-
-## 開発（Mac / Windows 共通）
+## 開発
 
 ```bash
 cd K-Tech-Vault-Atlas
 npm install
 npm run build
-npm run dev
 ```
 
-ビルド成果物: `main.js`, `manifest.json`, `styles.css` を Vault の `.obsidian/plugins/k-tech-vault-atlas/` にコピーして有効化。
+`main.js`, `manifest.json`, `styles.css` を Vault の `.obsidian/plugins/k-tech-vault-atlas/` にコピー。
 
-詳細: `HANDOFF.md`
+正本: `ROADMAP.md` / `HANDOFF.md` / `docs/diagnosis-rules.md`
 
 ## ライセンス
 
-MIT — 作者 K-Tech Studio
+MIT — K-Tech Studio
