@@ -51,13 +51,20 @@ jobs:
             test -f "$f" || { echo "Missing required release file: $f"; exit 1; }
           done
 
-      - name: Attest plugin artifacts
+      - name: Attest main.js
         uses: actions/attest-build-provenance@v4
         with:
-          subject-path: |
-            main.js
-            manifest.json
-            styles.css
+          subject-path: main.js
+
+      - name: Attest manifest.json
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: manifest.json
+
+      - name: Attest styles.css
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: styles.css
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2

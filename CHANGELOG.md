@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [1.0.2] — 2026-09-18
+
+### Fixed
+
+- `main.js` / `styles.css` のハッシュを版ごとに変える。attestation はファイル単位。private 当時の壊れた署名が同じ digest に残っていた問題を解消
+
 ## [1.0.1] — 2026-09-18
 
 ### Fixed
