@@ -4,3 +4,6 @@ node_modules/
 Thumbs.db
 Desktop.ini
 *.log
+
+# Cursor ops live in K-Tech Communication Network (private)
+.cursor/
