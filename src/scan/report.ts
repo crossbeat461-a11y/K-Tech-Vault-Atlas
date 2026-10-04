@@ -1,5 +1,8 @@
 import type { EntrySource } from "../profile";
 import type { HubLockReason } from "./hub-lock";
+import type { HubNoteGapItem } from "./hub-note-gap";
+
+export type { HubNoteGapItem } from "./hub-note-gap";
 
 export type ScanMode = "quick" | "deep";
 export type FindingSeverity = "info" | "warn" | "gap" | "action";
@@ -136,6 +139,7 @@ export interface VaultScanResult {
   deferredWaiting: DeferredHubWaiting[];
   existingHubs: ExistingHubInfo[];
   linkGaps: LinkGapItem[];
+  hubNoteGaps: HubNoteGapItem[];
   findings: ScanFinding[];
 }
 
@@ -163,6 +167,7 @@ export function formatReportMarkdown(result: VaultScanResult): string {
     `- 除外スキップ: ${result.skippedExcluded}`,
     `- 入口: ${result.entryInfo.displayLabel}${result.entryInfo.exists ? "" : "（未作成）"}`,
     `- 入口未リンク HUB: ${result.entryUnlinkedHubs.length}`,
+    `- HUB 記載ギャップ: ${result.hubNoteGaps.length}`,
     `- スキャン種別: ${result.scanMode === "deep" ? "Deep Scan" : "通常"}`,
     "",
   ];
@@ -249,6 +254,37 @@ export function formatReportMarkdown(result: VaultScanResult): string {
     lines.push("");
   }
 
+  if (result.hubNoteGaps.length > 0) {
+    lines.push("## HUB 記載ギャップ", "");
+    for (const gap of result.hubNoteGaps) {
+      const bits: string[] = [];
+      if (gap.missingNotes.length > 0) {
+        bits.push(`未記載 ${gap.missingNotes.length}`);
+      }
+      if (gap.staleLinks.length > 0) {
+        bits.push(`本文のみ ${gap.staleLinks.length}`);
+      }
+      if (gap.skipReason === "locked") {
+        bits.push("ロック中・追記なし");
+      }
+      if (gap.skipReason === "dataview") {
+        bits.push("Dataview のため未記載チェックなし");
+      }
+      lines.push(`- ❓ \`${gap.folderPath}\` → \`${gap.hubPath}\`（${bits.join(" / ")}）`);
+      if (gap.missingNotes.length > 0) {
+        lines.push(
+          `  - 未記載: ${gap.missingNotes.map((path) => `\`${path}\``).join(", ")}`
+        );
+      }
+      if (gap.staleLinks.length > 0) {
+        lines.push(
+          `  - 本文のみ: ${gap.staleLinks.map((path) => `\`${path}\``).join(", ")}`
+        );
+      }
+    }
+    lines.push("");
+  }
+
   const guide = result.folderGuide;
   if (
     guide.emptyFolders.length > 0 ||
@@ -284,6 +320,8 @@ export function formatReportMarkdown(result: VaultScanResult): string {
   const otherFindings = result.findings.filter(
     (f) =>
       f.code !== "HUB_RECOMMENDED" &&
+      f.code !== "HUB_NOTE_GAP" &&
+      f.code !== "HUB_NOTE_STALE_LINK" &&
       f.code !== "FOLDER_EMPTY" &&
       f.code !== "FOLDER_SUBFOLDER_ONLY" &&
       f.code !== "FOLDER_NAMING_DRIFT"

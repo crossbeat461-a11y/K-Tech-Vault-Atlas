@@ -14,19 +14,19 @@ Paste these values in the developer dashboard.
 ## Short description
 
 ```
-Scan folder and hub (MOC) layout in your vault. Spot gaps, create or remove hub notes with toggles, fix parent and entry links, protect hand-written hubs. Deep Scan when structure changes. Offline.
+Scan folder and hub (MOC) layout. Spot gaps, toggle hubs, fix parent and entry links, see notes missing from a hub list. Protect hand-written hubs. Deep Scan when structure changes. Offline.
 ```
 
 ## Longer description (if available)
 
 ```
-K-Tech Vault Atlas maps folder and hub (MOC) notes in your vault before you reorganize. Open the Atlas panel, run a quick scan, then use toggles: ON creates a hub from a template; OFF moves a hub to trash and defers the folder. Locked hubs (entry note, hub-managed: external, or Deep Scan protection) cannot be deleted.
+K-Tech Vault Atlas maps folder and hub (MOC) notes before you reorganize. Open the Atlas panel, run a quick scan, then use toggles: ON creates a hub from a template; OFF moves a hub to trash and defers the folder. Locked hubs (entry note, hub-managed: external, or Deep Scan protection) cannot be deleted.
 
-The scan lists existing hubs, recommendations, deferred folders, missing parent links, and entry-note link gaps. Append wikilinks in one click. With Homepage integration enabled, Atlas reads the Homepage startup note as your entry and never edits Homepage settings.
+The scan lists existing hubs, recommendations, deferred folders, missing parent links, entry-note gaps, and folder notes missing from that folder's hub. Append missing notes to one hub at a time after confirm. Stale hub links are reported only; Atlas never deletes hub body lines. Homepage integration reads the startup note as entry and never edits Homepage settings.
 
-Deep Scan lets you protect hand-written hubs and accept exclude-folder suggestions (Inbox, Daily, .obsidian). Folder Guide reports empty folders, subfolder-only folders, and naming drift without moving anything.
+Deep Scan protects hand-written hubs and can accept exclude-folder suggestions. Folder Guide reports empty folders, subfolder-only folders, and naming drift without moving anything.
 
-Save Vault Profile rules locally, export a Markdown report into your vault, or copy to the clipboard. Fully offline except optional Buy Me a Coffee links in Settings or the install/update modal.
+Save Vault Profile rules locally, export a Markdown report, or copy it. Fully offline except optional Buy Me a Coffee links.
 ```
 
 ## Suggested categories / tags

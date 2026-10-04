@@ -21,6 +21,7 @@ import { isHubNote } from "./hub-detect";
 import { suggestExcludeFolders } from "./exclude-suggest";
 import { buildFolderGuide } from "./folder-guide";
 import { resolveHubLock, type HubLockStatus } from "./hub-lock";
+import { buildHubNoteGap } from "./hub-note-gap";
 import {
   recommendHubReason,
   resolveParentHubPath,
@@ -30,6 +31,7 @@ import type {
   DeferredHubWaiting,
   ExistingHubInfo,
   HubReviewItem,
+  HubNoteGapItem,
   LinkGapItem,
   RecommendedHub,
   ReconsideredHub,
@@ -41,6 +43,7 @@ import type {
 export interface ScanOptions {
   mode?: ScanMode;
   hubProtected?: string[];
+  hubNoteGapIgnored?: string[];
 }
 
 function shouldSuggestProtect(
@@ -141,6 +144,7 @@ export async function scanVault(
   profile = withConfigDirExclude(profile, app.vault.configDir);
   const scanMode: ScanMode = options.mode ?? "quick";
   const hubProtected = options.hubProtected ?? [];
+  const hubNoteGapIgnored = options.hubNoteGapIgnored ?? [];
   const resolvedEntry = await resolveEntry(app, profile);
   const entryPath = effectiveEntryPathForScan(resolvedEntry);
   const findings: ScanFinding[] = [];
@@ -150,6 +154,7 @@ export async function scanVault(
   const deferredWaiting: DeferredHubWaiting[] = [];
   const existingHubs: ExistingHubInfo[] = [];
   const linkGaps: LinkGapItem[] = [];
+  const hubNoteGaps: HubNoteGapItem[] = [];
   const deferredByPath = new Map(
     hubDeferred.map((entry) => [entry.folderPath, entry])
   );
@@ -321,6 +326,42 @@ export async function scanVault(
         detail: network.parentHubFile,
       });
     }
+
+    if (
+      folder instanceof TFolder &&
+      !stringListHas(hubNoteGapIgnored, folderPath)
+    ) {
+      const hubFiles = hubFilesByFolder.get(folderPath) ?? [];
+      const gap = buildHubNoteGap({
+        folderPath,
+        hubPath,
+        hubContent,
+        folder,
+        hubFilePaths: hubFiles.map((file) => file.path),
+        locked: lock.locked,
+      });
+      if (gap) {
+        hubNoteGaps.push(gap);
+        if (gap.missingNotes.length > 0) {
+          findings.push({
+            severity: "gap",
+            code: "HUB_NOTE_GAP",
+            message: `${folderPath}: HUB 未記載 ${gap.missingNotes.length} 件`,
+            path: hubPath,
+            detail: gap.missingNotes.join(", "),
+          });
+        }
+        if (gap.staleLinks.length > 0) {
+          findings.push({
+            severity: "gap",
+            code: "HUB_NOTE_STALE_LINK",
+            message: `${folderPath}: HUB 本文のみ ${gap.staleLinks.length} 件`,
+            path: hubPath,
+            detail: gap.staleLinks.join(", "),
+          });
+        }
+      }
+    }
   }
 
   for (const folder of folders) {
@@ -453,6 +494,7 @@ export async function scanVault(
   });
   existingHubs.sort((a, b) => a.folderPath.localeCompare(b.folderPath, "ja"));
   linkGaps.sort((a, b) => a.folderPath.localeCompare(b.folderPath, "ja"));
+  hubNoteGaps.sort((a, b) => a.folderPath.localeCompare(b.folderPath, "ja"));
   hubReviewItems.sort((a, b) => a.folderPath.localeCompare(b.folderPath, "ja"));
 
   const excludeSuggestions =
@@ -512,6 +554,7 @@ export async function scanVault(
     deferredWaiting,
     existingHubs,
     linkGaps,
+    hubNoteGaps,
     findings,
   };
 }

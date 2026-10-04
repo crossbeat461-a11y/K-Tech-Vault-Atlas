@@ -5,8 +5,13 @@ import { createHomeEntryNote } from "../entry/entry-create";
 import { deleteHubFile } from "../hub/hub-delete";
 import { appendChildLinkToParentHub } from "../hub/hub-parent-update";
 import { createHubForFolder } from "../hub/hub-create";
+import {
+  appendMissingNotesToHub,
+  formatMissingNotesPreview,
+} from "../hub/hub-note-gap-update";
 import { exportReportToVault } from "../report/report-export";
 import { formatReportMarkdown, type VaultScanResult } from "../scan/report";
+import type { HubNoteGapItem } from "../scan/hub-note-gap";
 import {
   buildAtlasPanelRows,
   statusLabel,
@@ -107,7 +112,7 @@ export class AtlasPanel extends Modal {
       return;
     }
     summaryEl.setText(
-      `HUB ${this.result.hubCount} 件 / 推奨 ${this.result.recommendedHubs.length} / 再検討 ${this.result.reconsideredHubs.length} / 保留 ${this.result.deferredWaiting.length} / 親リンク不足 ${this.result.linkGaps.length} / 入口未リンク ${this.result.entryUnlinkedHubs.length}`
+      `HUB ${this.result.hubCount} 件 / 推奨 ${this.result.recommendedHubs.length} / 再検討 ${this.result.reconsideredHubs.length} / 保留 ${this.result.deferredWaiting.length} / 親リンク不足 ${this.result.linkGaps.length} / 入口未リンク ${this.result.entryUnlinkedHubs.length} / 記載ギャップ ${this.result.hubNoteGaps.length}`
     );
   }
 
@@ -211,10 +216,14 @@ export class AtlasPanel extends Modal {
       );
     }
 
+    this.renderHubNoteGapSection();
+
     const warnings = this.result.findings.filter(
       (f) =>
         (f.severity === "warn" || f.severity === "gap") &&
         f.code !== "HUB_LINK_GAP" &&
+        f.code !== "HUB_NOTE_GAP" &&
+        f.code !== "HUB_NOTE_STALE_LINK" &&
         f.code !== "HUB_RECOMMENDED" &&
         f.code !== "HUB_RECONSIDER"
     );
@@ -501,6 +510,112 @@ export class AtlasPanel extends Modal {
     if (fixed > 0) {
       new Notice(`Vault Atlas: 親 HUB に ${fixed} 件リンクを追記`);
     }
+    await this.rescan(false);
+  }
+
+  private renderHubNoteGapSection(): void {
+    if (!this.result || this.result.hubNoteGaps.length === 0) {
+      return;
+    }
+
+    this.bodyEl.createEl("h3", { text: "HUB 記載ギャップ" });
+    this.bodyEl.createEl("p", {
+      cls: "setting-item-description",
+      text: "フォルダ直下のノートと HUB 本文を照合します。追記は1件ずつ、確認のあとだけ。本文からの削除はしません。",
+    });
+
+    for (const gap of this.result.hubNoteGaps) {
+      const bits: string[] = [];
+      if (gap.missingNotes.length > 0) {
+        bits.push(`未記載 ${gap.missingNotes.length}`);
+      }
+      if (gap.staleLinks.length > 0) {
+        bits.push(`本文のみ ${gap.staleLinks.length}（削除しません）`);
+      }
+      if (gap.skipReason === "locked") {
+        bits.push("ロック中のため追記できません");
+      }
+      if (gap.skipReason === "dataview") {
+        bits.push("Dataview があるため未記載は見ていません");
+      }
+
+      const setting = new Setting(this.bodyEl)
+        .setName(gap.folderPath || "(root)")
+        .setDesc(`${bits.join(" / ")} → ${gap.hubPath}`);
+
+      if (gap.canAppend) {
+        setting.addButton((btn) =>
+          btn.setButtonText("未記載を追記").onClick(() => {
+            void this.appendHubNoteGap(gap);
+          })
+        );
+      }
+
+      setting.addButton((btn) =>
+        btn.setButtonText("次回から出さない").onClick(() => {
+          void this.ignoreHubNoteGap(gap);
+        })
+      );
+      setting.settingEl.addClass("vault-atlas-hub-row");
+    }
+  }
+
+  private async appendHubNoteGap(gap: HubNoteGapItem): Promise<void> {
+    if (!gap.canAppend || gap.missingNotes.length === 0) {
+      return;
+    }
+
+    const preview = formatMissingNotesPreview(gap.missingNotes);
+    const confirmed = await confirmAtlasAction(this.app, {
+      title: "未記載を追記",
+      message: `${gap.hubPath} の「ノート」へ、次の ${gap.missingNotes.length} 件を足します。\n${preview}\nほかの見出しや既存の行は消しません。`,
+      confirmLabel: "追記",
+    });
+    if (!confirmed) {
+      return;
+    }
+
+    const entryPath =
+      this.result?.entryInfo.effectivePath ??
+      (await this.plugin.getEffectiveEntryPath());
+    const result = await appendMissingNotesToHub(
+      this.app,
+      gap.folderPath,
+      gap.hubPath,
+      this.plugin.settings.vaultProfile,
+      this.plugin.settings.hubProtected,
+      entryPath
+    );
+
+    if (!result.ok) {
+      const notice =
+        result.reason === "locked"
+          ? "ロック中のため追記しませんでした"
+          : result.reason === "dataview"
+            ? "Dataview があるため追記しませんでした"
+            : result.reason === "none"
+              ? "追記する未記載はありませんでした"
+              : "HUB またはフォルダが見つかりません";
+      new Notice(`Vault Atlas: ${notice}`);
+      await this.rescan(false);
+      return;
+    }
+
+    new Notice(`Vault Atlas: ${result.hubPath} に ${result.appended} 件追記`);
+    await this.rescan(false);
+  }
+
+  private async ignoreHubNoteGap(gap: HubNoteGapItem): Promise<void> {
+    const confirmed = await confirmAtlasAction(this.app, {
+      title: "記載ギャップを出さない",
+      message: `${gap.folderPath || "(root)"} の記載ギャップを、次回のスキャンから出さないようにします。`,
+      confirmLabel: "出さない",
+    });
+    if (!confirmed) {
+      return;
+    }
+    await this.plugin.ignoreHubNoteGap(gap.folderPath);
+    new Notice(`Vault Atlas: ${gap.folderPath || "(root)"} を記載ギャップから外しました`);
     await this.rescan(false);
   }
 

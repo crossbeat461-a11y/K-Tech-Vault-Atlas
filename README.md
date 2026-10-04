@@ -2,7 +2,7 @@
 
 Scan folder and hub (MOC) structure in an existing vault, then fix gaps step by step from the Atlas panel.
 
-**Version 1.0.4** — [Community plugins](https://obsidian.md/plugins?id=k-tech-vault-atlas) · [LP](https://k-tech-vault-atlas-lp.vercel.app/) · [Homepage](https://k-tech-lab.vercel.app/)
+**Version 1.1.0** — [Community plugins](https://obsidian.md/plugins?id=k-tech-vault-atlas) · [LP](https://k-tech-vault-atlas-lp.vercel.app/) · [Homepage](https://k-tech-lab.vercel.app/)
 
 ## Features
 
@@ -11,6 +11,7 @@ Scan folder and hub (MOC) structure in an existing vault, then fix gaps step by 
 - **Hub toggles** — create from template or move to trash (with confirm)
 - **Homepage integration** — optional entry note from Homepage plugin
 - **Folder Guide** — empty folders, subfolder-only, naming drift (report only)
+- **Hub list check** — notes in a folder missing from that folder's hub (append one hub at a time, with confirm)
 - **Report export** — save Markdown into your vault or copy to clipboard
 - **Offline** — vault-only scan; no network except optional Buy Me a Coffee link
 

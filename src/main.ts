@@ -9,7 +9,7 @@ import {
   resolveEntry,
   type ResolvedEntry,
 } from "./entry/entry-resolve";
-import { mergeHubProtectedLists } from "./hub/hub-protect";
+import { mergeHubProtectedLists, upsertHubProtected } from "./hub/hub-protect";
 import { scanVault, type ScanOptions } from "./scan/vault-scan";
 import type { ScanMode, VaultScanResult } from "./scan/report";
 import type { DeepScanReviewResult } from "./ui/deep-scan-modal";
@@ -87,6 +87,7 @@ export default class VaultAtlasPlugin extends Plugin {
     const options: ScanOptions = {
       mode,
       hubProtected: this.settings.hubProtected,
+      hubNoteGapIgnored: this.settings.hubNoteGapIgnored,
     };
     const result = await scanVault(
       this.app,
@@ -164,6 +165,7 @@ export default class VaultAtlasPlugin extends Plugin {
         this.settings.vaultProfile,
         this.settings.hubDeferred,
         this.settings.hubProtected,
+        this.settings.hubNoteGapIgnored,
         this.lastSeenVersion
       )
     );
@@ -207,6 +209,15 @@ export default class VaultAtlasPlugin extends Plugin {
       entries = removeDeferredEntry(entries, folderPath);
     }
     this.settings.hubDeferred = entries;
+    await this.saveSettings();
+  }
+
+  async ignoreHubNoteGap(folderPath: string): Promise<void> {
+    this.settings.hubNoteGapIgnored = upsertHubProtected(
+      this.settings.hubNoteGapIgnored,
+      folderPath,
+      true
+    );
     await this.saveSettings();
   }
 

@@ -1,6 +1,6 @@
 # HANDOFF — K-Tech Vault Atlas
 
-<!-- updated: 2026-09-18 -->
+<!-- updated: 2026-10-04 -->
 
 ## Product
 
@@ -12,7 +12,7 @@
 | Repo | `crossbeat461-a11y/K-Tech-Vault-Atlas`（public） |
 | LP | https://k-tech-vault-atlas-lp.vercel.app/ |
 | Community | https://obsidian.md/plugins?id=k-tech-vault-atlas |
-| Version | **1.0.4** |
+| Version | **1.1.0** |
 
 ## Privacy
 
@@ -48,8 +48,10 @@ src/ui/confirm-modal.ts  作成/削除確認
 src/scan/vault-scan.ts   フォルダ walk、HUB 検出
 src/scan/hub-network.ts  親 HUB 本文解析
 src/scan/hub-recommend.ts HUB 推奨/heuristic
+src/scan/hub-note-gap.ts フォルダ直下 vs HUB 本文
 src/hub/hub-create.ts    HUB テンプレ作成
 src/hub/hub-delete.ts    HUB ゴミ箱へ
+src/hub/hub-note-gap-update.ts 未記載の確認つき追記
 src/hub-defer.ts         保留/再検討
 src/profile.ts           Vault Profile
 docs/diagnosis-rules.md  診断正本
@@ -64,6 +66,7 @@ docs/diagnosis-rules.md  診断正本
 | 0.8.0 | Deep Scan、HUB 保護、除外候補 | **Done** |
 | 0.9.0 | Folder Guide、Markdown 出力 | **Done** |
 | 1.0.0 | Release、掲載判断 | **Done** |
+| 1.1.0 | HUB 記載ギャップ | **Done** |
 
 Policy: `ROADMAP.md` が正本。
 
@@ -83,10 +86,11 @@ Policy: `ROADMAP.md` が正本。
 
 - [x] Folder Guide（0.9.0）
 - [x] Markdown レポートのファイル出力（0.9.0）
+- [x] HUB 記載ギャップ（1.1.0）
 
-## Ship（1.0.4）
+## Ship（1.1.0）
 
-- GitHub Release: 現行 tag は `1.0.4`（審査対応後。1.0.0 から上げた）
+- GitHub Release: 現行 tag は `1.1.0`
 - LP: https://k-tech-vault-atlas-lp.vercel.app/
 - community.obsidian.md: `LISTING.md` を Edit listing に貼る
-- pending 確定: **完了**（1.0.4）
+- pending 確定: **人**（Check for new releases）

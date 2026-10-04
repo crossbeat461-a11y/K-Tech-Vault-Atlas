@@ -1,6 +1,6 @@
 # K-Tech Vault Atlas — ロードマップ
 
-<!-- updated: 2026-09-18 -->
+<!-- updated: 2026-10-04 -->
 
 正本はこのファイル。`HANDOFF.md` の Phase 表と同期する。
 
@@ -26,6 +26,7 @@ Vault Doctor / Vault Inspector が「メンテナンス全般」なら、Vault A
 | 5 | 0.8 | Deep Scan、HUB 保護、除外候補提案 | **完了** |
 | 6 | 0.9 | Folder Guide、Markdown ファイル出力 | **完了** |
 | 7 | 1.0.0 | 安定化、GitHub Release、掲載判断 | **完了** |
+| 8 | 1.1.0 | HUB 記載ギャップ（通常スキャン。1件ずつ追記） | **完了** |
 
 ## 1.0.0 出荷
 
@@ -38,6 +39,10 @@ Vault Doctor / Vault Inspector が「メンテナンス全般」なら、Vault A
 - **Folder Guide**（空フォルダ / サブフォルダのみ / 命名ゆれ — 報告のみ）
 - レポートを Vault 内 Markdown ファイルとして保存
 - 審査向け: 本番ビルドから console 除去
+
+## 1.1.0 で足したこと
+
+- **HUB 記載ギャップ**（通常スキャン。未記載は1 HUB ずつ確認して追記。本文からの削除なし）
 
 ## 0.8.0 で足したこと
 

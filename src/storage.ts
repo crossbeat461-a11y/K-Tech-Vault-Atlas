@@ -14,6 +14,7 @@ export interface PluginStorage {
   vaultProfile: VaultProfileV1;
   hubDeferred: HubDeferredEntry[];
   hubProtected: string[];
+  hubNoteGapIgnored: string[];
   lastSeenVersion?: string;
 }
 
@@ -23,6 +24,7 @@ export function parseStorage(raw: unknown): PluginStorage {
       vaultProfile: { ...DEFAULT_VAULT_PROFILE },
       hubDeferred: [],
       hubProtected: [],
+      hubNoteGapIgnored: [],
     };
   }
 
@@ -31,6 +33,7 @@ export function parseStorage(raw: unknown): PluginStorage {
       vaultProfile: mergeVaultProfile(raw.vaultProfile),
       hubDeferred: parseHubDeferred(raw.hubDeferred),
       hubProtected: parseHubProtected(raw.hubProtected),
+      hubNoteGapIgnored: parseHubProtected(raw.hubNoteGapIgnored),
       lastSeenVersion:
         typeof raw.lastSeenVersion === "string"
           ? raw.lastSeenVersion
@@ -42,6 +45,7 @@ export function parseStorage(raw: unknown): PluginStorage {
     vaultProfile: mergeVaultProfile(raw),
     hubDeferred: parseHubDeferred(raw.hubDeferred),
     hubProtected: parseHubProtected(raw.hubProtected),
+    hubNoteGapIgnored: parseHubProtected(raw.hubNoteGapIgnored),
     lastSeenVersion: undefined,
   };
 }
@@ -50,7 +54,14 @@ export function toStorage(
   vaultProfile: VaultProfileV1,
   hubDeferred: HubDeferredEntry[],
   hubProtected: string[],
+  hubNoteGapIgnored: string[],
   lastSeenVersion?: string
 ): PluginStorage {
-  return { vaultProfile, hubDeferred, hubProtected, lastSeenVersion };
+  return {
+    vaultProfile,
+    hubDeferred,
+    hubProtected,
+    hubNoteGapIgnored,
+    lastSeenVersion,
+  };
 }

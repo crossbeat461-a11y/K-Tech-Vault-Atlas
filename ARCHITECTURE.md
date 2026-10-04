@@ -18,6 +18,7 @@ Vault Atlas は **Core + 将来 Modules** の1リポジトリ構成。
 │  Modules (future, same repo)            │
 │  · Hub Keeper — hub create/link         │
 │  · Folder Guide — folder suggestions    │
+│  · Hub list check — folder notes vs hub │
 └─────────────────────────────────────────┘
 ```
 
